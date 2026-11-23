@@ -339,6 +339,25 @@ def main():
 
     phone_service.open_settings_requested.connect(show_settings)
     phone_service.dock_requested.connect(lambda edge: island.set_dock_edge(edge))
+    phone_service.toggle_requested.connect(island.toggle_expand)
+
+    def on_phone_theme(data: dict):
+        mode = data.get("mode", "ambient")
+        if mode == "ambient":
+            island.set_theme_ambient()
+        elif mode == "solid":
+            col = data.get("color", "#08080C")
+            island.set_theme_solid(QColor(col))
+        elif mode == "frosted":
+            island.set_theme_solid(QColor(30, 32, 42, 230))
+        if "opacity" in data:
+            try:
+                op = float(data["opacity"])
+                island.set_ambient_opacity(op)
+            except Exception:
+                pass
+
+    phone_service.theme_requested.connect(on_phone_theme)
 
     def on_phone_simulate(kind: str):
         if kind == "osd":

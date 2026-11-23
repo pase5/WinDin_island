@@ -15,6 +15,7 @@ a = Analysis(
         'services.autostart_service',
         'services.settings_service',
         'services.phone_bridge',
+        'services.web_companion',
         'ui',
         'ui.styles',
         'ui.island_widget',
