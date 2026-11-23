@@ -1197,7 +1197,7 @@ class DynamicIslandWidget(QWidget):
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.ActivationChange:
-            if not self.isActiveWindow() and self._island_state == "expanded":
+            if not self.isActiveWindow() and self._island_state == "expanded" and not getattr(self, "_is_dragging", False):
                 self.collapse_to_compact()
         super().changeEvent(event)
 
@@ -1811,6 +1811,41 @@ class DynamicIslandWidget(QWidget):
         ctrls_corner.addStretch()
         corner_layout.addLayout(ctrls_corner)
 
+        # Install drag filters on child containers so dragging while expanded is fully responsive
+        self._setup_child_drag_filters()
+
+    def _setup_child_drag_filters(self):
+        self._drag_filter_widgets = set()
+        containers = [
+            getattr(self, "dashboard_container", None),
+            getattr(self, "dashboard_container_side", None),
+            getattr(self, "dashboard_container_corner", None)
+        ]
+        interactive_types = (VectorMediaButton, TimelineScrubber)
+        for c in containers:
+            if c is None:
+                continue
+            self._drag_filter_widgets.add(c)
+            c.installEventFilter(self)
+            for child in c.findChildren(QWidget):
+                if not isinstance(child, interactive_types):
+                    self._drag_filter_widgets.add(child)
+                    child.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if hasattr(self, "_drag_filter_widgets") and watched in self._drag_filter_widgets:
+            ev_type = event.type()
+            if ev_type == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+                self.mousePressEvent(event)
+                return True
+            elif ev_type == QEvent.Type.MouseMove and (event.buttons() & Qt.MouseButton.LeftButton):
+                self.mouseMoveEvent(event)
+                return True
+            elif ev_type == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
+                self.mouseReleaseEvent(event)
+                return True
+        return super().eventFilter(watched, event)
+
     # -------------------------------------------------------------
     # Signal Connections & Auto-Hide on No Music
     # -------------------------------------------------------------
@@ -2153,6 +2188,26 @@ class DynamicIslandWidget(QWidget):
         if abs(self._dock_morph - old_morph) > 0.001:
             self.update()
 
+        # Smooth live stretching & geometry interpolation during dragging
+        if getattr(self, "_is_dragging", False) and hasattr(self, "_target_w"):
+            dx = abs(self._target_x - self._live_x)
+            dy = abs(self._target_y - self._live_y)
+            dw = abs(self._target_w - self._live_w)
+            dh = abs(self._target_h - self._live_h)
+            if dw > 0.5 or dh > 0.5 or dx > 0.5 or dy > 0.5:
+                lerp_p = 0.45
+                lerp_s = 0.35
+                self._live_x += (self._target_x - self._live_x) * lerp_p
+                self._live_y += (self._target_y - self._live_y) * lerp_p
+                self._live_w += (self._target_w - self._live_w) * lerp_s
+                self._live_h += (self._target_h - self._live_h) * lerp_s
+                self.setGeometry(int(self._live_x), int(self._live_y), int(self._live_w), int(self._live_h))
+                if getattr(self, "_drag_mode", "compact") == "expanded":
+                    self._update_child_visibility("expanded")
+                if getattr(self, "_dock_edge", "top") in ("bottom", "bottom-left", "bottom-right"):
+                    self._ensure_behind_taskbar()
+                self.update()
+
         # Fluid velocity dampening
         self._liquid_vx *= 0.82
         self._liquid_vy *= 0.82
@@ -2286,9 +2341,18 @@ class DynamicIslandWidget(QWidget):
             self._drag_start_global = cur_pt
             self._drag_start_pos = self.pos()
             self._drag_start_size = self.size()
-            self._drag_grab_offset = event.position().toPoint()
+            self._drag_grab_offset = self.mapFromGlobal(cur_pt)
             self._drag_last_pos = cur_pt
             self._is_dragging = False
+            self._drag_mode = "expanded" if self._island_state == "expanded" else "compact"
+            self._live_x = float(self.x())
+            self._live_y = float(self.y())
+            self._live_w = float(self.width())
+            self._live_h = float(self.height())
+            self._target_x = self._live_x
+            self._target_y = self._live_y
+            self._target_w = self._live_w
+            self._target_h = self._live_h
 
             # Stop any hover timers & in-flight animations so they never contest user drag
             self._hover_expand_timer.stop()
@@ -2311,7 +2375,16 @@ class DynamicIslandWidget(QWidget):
                     self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
                     self._hover_expand_timer.stop()
                     self._hover_collapse_timer.stop()
-                    if self._island_state != "compact":
+                    if getattr(self, "_drag_mode", "compact") == "expanded":
+                        self._island_state = "expanded"
+                        self._expand_progress_val = 1.0
+                        for eff in (getattr(self, "_dashboard_opacity_effect", None),
+                                    getattr(self, "_side_opacity_effect", None),
+                                    getattr(self, "_corner_opacity_effect", None)):
+                            if eff is not None:
+                                eff.setOpacity(1.0)
+                        self._update_child_visibility("expanded")
+                    else:
                         self._island_state = "compact"
                         self._expand_progress_val = 0.0
                         self._update_child_visibility("compact")
@@ -2337,9 +2410,9 @@ class DynamicIslandWidget(QWidget):
                     prev_edge = getattr(self, "_dock_edge", "top")
 
                     # Hysteresis thresholds for live edge & corner snapping
-                    # Corners: snap into corner at <= 120px, hold corner until > 150px
-                    c_snap = 120
-                    c_hold = 150
+                    is_exp = (getattr(self, "_drag_mode", "compact") == "expanded")
+                    c_snap = 140 if is_exp else 120
+                    c_hold = 170 if is_exp else 150
                     in_tl = (d_top <= c_hold and d_left <= c_hold) if prev_edge in ("top-left", "corner-tl") else (d_top <= c_snap and d_left <= c_snap)
                     in_tr = (d_top <= c_hold and d_right <= c_hold) if prev_edge in ("top-right", "corner-tr") else (d_top <= c_snap and d_right <= c_snap)
                     in_bl = (d_bot <= c_hold and d_left <= c_hold) if prev_edge in ("bottom-left", "corner-bl") else (d_bot <= c_snap and d_left <= c_snap)
@@ -2354,9 +2427,8 @@ class DynamicIslandWidget(QWidget):
                     elif in_br:
                         target_edge = "bottom-right"
                     else:
-                        # Screen edges: snap at <= 75px, hold until > 100px
-                        e_snap = 75
-                        e_hold = 100
+                        e_snap = 90 if is_exp else 75
+                        e_hold = 120 if is_exp else 100
 
                         min_d = min(d_top, d_bot, d_left, d_right)
                         if min_d == d_top:
@@ -2377,14 +2449,26 @@ class DynamicIslandWidget(QWidget):
                     has_media = self._is_music_active() or self._media_info.get("has_media", False)
 
                     if target_edge in ("top-left", "top-right", "bottom-left", "bottom-right"):
-                        target_w = CORNER_COMPACT_MUSIC_W if has_media else CORNER_COMPACT_IDLE_W
-                        target_h = CORNER_COMPACT_MUSIC_H if has_media else CORNER_COMPACT_IDLE_H
+                        if is_exp:
+                            target_w = float(CORNER_EXPANDED_SIZE)
+                            target_h = float(CORNER_EXPANDED_SIZE)
+                        else:
+                            target_w = float(CORNER_COMPACT_MUSIC_W if has_media else CORNER_COMPACT_IDLE_W)
+                            target_h = float(CORNER_COMPACT_MUSIC_H if has_media else CORNER_COMPACT_IDLE_H)
                     elif target_edge in ("left", "right"):
-                        target_w = SIDE_COMPACT_MUSIC_W if has_media else SIDE_COMPACT_IDLE_W
-                        target_h = SIDE_COMPACT_MUSIC_H if has_media else SIDE_COMPACT_IDLE_H
-                    else:
-                        target_w = COMPACT_MUSIC_WIDTH if has_media else COMPACT_IDLE_WIDTH
-                        target_h = COMPACT_HEIGHT
+                        if is_exp:
+                            target_w = float(SIDE_EXPANDED_W)
+                            target_h = float(SIDE_EXPANDED_H)
+                        else:
+                            target_w = float(SIDE_COMPACT_MUSIC_W if has_media else SIDE_COMPACT_IDLE_W)
+                            target_h = float(SIDE_COMPACT_MUSIC_H if has_media else SIDE_COMPACT_IDLE_H)
+                    else:  # "top", "bottom", "floating"
+                        if is_exp:
+                            target_w = float(EXPANDED_WIDTH)
+                            target_h = float(EXPANDED_HEIGHT)
+                        else:
+                            target_w = float(COMPACT_MUSIC_WIDTH if has_media else COMPACT_IDLE_WIDTH)
+                            target_h = float(COMPACT_HEIGHT)
 
                     start_w = max(1.0, float(getattr(self, "_drag_start_size", self.size()).width()))
                     start_h = max(1.0, float(getattr(self, "_drag_start_size", self.size()).height()))
@@ -2393,47 +2477,70 @@ class DynamicIslandWidget(QWidget):
                     ratio_grab_y = max(0.0, min(1.0, grab_pt.y() / start_h))
 
                     if target_edge == "top-left":
-                        target_x = s_geo.left()
-                        target_y = s_geo.top()
+                        target_x = float(s_geo.left())
+                        target_y = float(s_geo.top())
                     elif target_edge == "top-right":
-                        target_x = s_geo.right() - target_w + 1
-                        target_y = s_geo.top()
+                        target_x = float(s_geo.right() - target_w + 1)
+                        target_y = float(s_geo.top())
                     elif target_edge == "bottom-left":
-                        target_x = s_geo.left()
-                        target_y = s_geo.bottom() - target_h + 1
+                        target_x = float(s_geo.left())
+                        target_y = float(s_geo.bottom() - target_h + 1)
                     elif target_edge == "bottom-right":
-                        target_x = s_geo.right() - target_w + 1
-                        target_y = s_geo.bottom() - target_h + 1
+                        target_x = float(s_geo.right() - target_w + 1)
+                        target_y = float(s_geo.bottom() - target_h + 1)
                     elif target_edge == "top":
-                        target_y = s_geo.top()
-                        target_x = int(c_x - target_w * ratio_grab_x)
-                        target_x = max(s_geo.left(), min(s_geo.right() - target_w + 1, target_x))
+                        target_y = float(s_geo.top())
+                        target_x = float(c_x - target_w * ratio_grab_x)
+                        target_x = max(float(s_geo.left()), min(float(s_geo.right() - target_w + 1), target_x))
                         self._dock_ratio_x = max(0.08, min(0.92, (target_x + target_w / 2.0 - s_geo.left()) / max(1.0, float(s_geo.width()))))
                     elif target_edge == "bottom":
-                        target_y = s_geo.bottom() - target_h + 1
-                        target_x = int(c_x - target_w * ratio_grab_x)
-                        target_x = max(s_geo.left(), min(s_geo.right() - target_w + 1, target_x))
+                        target_y = float(s_geo.bottom() - target_h + 1)
+                        target_x = float(c_x - target_w * ratio_grab_x)
+                        target_x = max(float(s_geo.left()), min(float(s_geo.right() - target_w + 1), target_x))
                         self._dock_ratio_x = max(0.08, min(0.92, (target_x + target_w / 2.0 - s_geo.left()) / max(1.0, float(s_geo.width()))))
                     elif target_edge == "left":
-                        target_x = s_geo.left()
-                        target_y = int(c_y - target_h * ratio_grab_y)
-                        target_y = max(s_geo.top(), min(s_geo.bottom() - target_h + 1, target_y))
+                        target_x = float(s_geo.left())
+                        target_y = float(c_y - target_h * ratio_grab_y)
+                        target_y = max(float(s_geo.top()), min(float(s_geo.bottom() - target_h + 1), target_y))
                         self._dock_ratio_y = max(0.08, min(0.92, (target_y + target_h / 2.0 - s_geo.top()) / max(1.0, float(s_geo.height()))))
                     elif target_edge == "right":
-                        target_x = s_geo.right() - target_w + 1
-                        target_y = int(c_y - target_h * ratio_grab_y)
-                        target_y = max(s_geo.top(), min(s_geo.bottom() - target_h + 1, target_y))
+                        target_x = float(s_geo.right() - target_w + 1)
+                        target_y = float(c_y - target_h * ratio_grab_y)
+                        target_y = max(float(s_geo.top()), min(float(s_geo.bottom() - target_h + 1), target_y))
                         self._dock_ratio_y = max(0.08, min(0.92, (target_y + target_h / 2.0 - s_geo.top()) / max(1.0, float(s_geo.height()))))
                     else:  # floating
-                        target_x = int(c_x - target_w * ratio_grab_x)
-                        target_y = int(c_y - target_h * ratio_grab_y)
-                        target_x = max(s_geo.left() + 10, min(s_geo.right() - target_w - 10, target_x))
-                        target_y = max(s_geo.top() + 10, min(s_geo.bottom() - target_h - 10, target_y))
+                        target_x = float(c_x - target_w * ratio_grab_x)
+                        target_y = float(c_y - target_h * ratio_grab_y)
+                        target_x = max(float(s_geo.left() + 10), min(float(s_geo.right() - target_w - 10), target_x))
+                        target_y = max(float(s_geo.top() + 10), min(float(s_geo.bottom() - target_h - 10), target_y))
                         self._floating_center = QPointF(float(target_x + target_w / 2.0), float(target_y + target_h / 2.0))
+
+                    self._target_x = target_x
+                    self._target_y = target_y
+                    self._target_w = target_w
+                    self._target_h = target_h
+
+                    if not hasattr(self, "_live_x"):
+                        self._live_x = float(self.x())
+                        self._live_y = float(self.y())
+                        self._live_w = float(self.width())
+                        self._live_h = float(self.height())
+
+                    # Fluid stretching and position tracking
+                    lerp_p = 0.55
+                    lerp_s = 0.35
+                    self._live_x += (self._target_x - self._live_x) * lerp_p
+                    self._live_y += (self._target_y - self._live_y) * lerp_p
+                    self._live_w += (self._target_w - self._live_w) * lerp_s
+                    self._live_h += (self._target_h - self._live_h) * lerp_s
 
                     self._dock_edge = target_edge
                     self._target_morph = 0.0 if target_edge == "floating" else 1.0
-                    self.setGeometry(int(target_x), int(target_y), int(target_w), int(target_h))
+
+                    self.setGeometry(int(self._live_x), int(self._live_y), int(self._live_w), int(self._live_h))
+
+                    if is_exp:
+                        self._update_child_visibility("expanded")
                     if target_edge in ("bottom", "bottom-left", "bottom-right"):
                         self._ensure_behind_taskbar()
                     self.update()
@@ -2518,10 +2625,11 @@ class DynamicIslandWidget(QWidget):
                     self._hovered = self.rect().contains(self.mapFromGlobal(QCursor.pos()))
 
                     # Settle cleanly into docked position with smooth spring easing
-                    self._apply_geometry_for_state(self._island_state, animate=True)
+                    mode = getattr(self, "_drag_mode", self._island_state)
+                    self._apply_geometry_for_state(mode, animate=True)
                     self._ensure_behind_taskbar()
                     self.save_current_settings()
-                    if self._island_state == "compact":
+                    if mode == "compact":
                         self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
                     else:
                         self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
@@ -2953,14 +3061,7 @@ class DynamicIslandWidget(QWidget):
             painter.drawLine(QPointF(0, h - 0.75), QPointF(w, h - 0.75))
 
         # 5. State-Specific Content
-        p = self.get_expand_progress()
-        compact_alpha = max(0.0, min(1.0, (0.28 - p) / 0.28))
-        if compact_alpha > 0.01:
-            painter.save()
-            painter.setOpacity(compact_alpha)
-            self._paint_compact_notch(painter, w, h)
-            painter.restore()
-        elif self._island_state == "toast":
+        if self._island_state == "toast":
             self._paint_toast_notch(painter, w, h)
         elif self._island_state == "device_popup":
             self._paint_device_popup_notch(painter, w, h)
@@ -2972,6 +3073,14 @@ class DynamicIslandWidget(QWidget):
             self._paint_otp_pill(painter, w, h)
         elif self._island_state == "file_shelf":
             self._paint_file_shelf(painter, w, h)
+        else:
+            p = self.get_expand_progress()
+            compact_alpha = max(0.0, min(1.0, (0.28 - p) / 0.28))
+            if compact_alpha > 0.01:
+                painter.save()
+                painter.setOpacity(compact_alpha)
+                self._paint_compact_notch(painter, w, h)
+                painter.restore()
 
         # 6. Subtle Download Progress Hairline (Spec 5.2)
         if getattr(self, "_download_progress", 0.0) > 0.01:
@@ -3823,8 +3932,9 @@ class DynamicIslandWidget(QWidget):
         tile_grad_bot = QColor(10, 18, 30, 250)
         self._paint_toast_icon(painter, icon_type, badge_x + badge_size / 2.0, badge_y + badge_size / 2.0, accent_col, tile_grad_bot)
 
-        # Close button in top-right
-        cx_x = w - 18.0
+        # Close button (away from bezel)
+        edge = getattr(self, "_dock_edge", "left")
+        cx_x = 18.0 if edge == "right" else (w - 18.0)
         cx_y = 18.0
         self._toast_close_rect = QRectF(cx_x - 10.0, cx_y - 10.0, 20.0, 20.0)
         painter.save()
