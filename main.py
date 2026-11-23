@@ -339,7 +339,7 @@ def main():
 
     phone_service.open_settings_requested.connect(show_settings)
     phone_service.dock_requested.connect(lambda edge: island.set_dock_edge(edge))
-    phone_service.toggle_requested.connect(island.toggle_expand)
+    phone_service.toggle_requested.connect(island.toggle_expanded)
 
     def on_phone_theme(data: dict):
         mode = data.get("mode", "ambient")

@@ -1380,6 +1380,8 @@ class DynamicIslandWidget(QWidget):
                 self.raise_()
             self.set_island_state("expanded")
 
+    toggle_expand = toggle_expanded
+
     def collapse_to_compact(self):
         self._hover_collapse_timer.stop()
         self._device_dismiss_timer.stop()
