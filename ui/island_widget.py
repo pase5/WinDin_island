@@ -1398,7 +1398,8 @@ class DynamicIslandWidget(QWidget):
         if app_icon is None or (hasattr(app_icon, "isNull") and app_icon.isNull()):
             try:
                 from services.icon_service import get_app_icon
-                app_icon = get_app_icon(app, target_size=48)
+                sc = getattr(self, "_solid_color", None) if getattr(self, "_bg_style", "ambient") == "solid" else None
+                app_icon = get_app_icon(app, target_size=48, solid_color=sc)
             except Exception:
                 app_icon = None
 
@@ -1478,22 +1479,94 @@ class DynamicIslandWidget(QWidget):
         else:
             self.set_glow_state("idle")
 
+    def get_ambient_color(self) -> QColor:
+        """
+        Determines the current ambient color based on active ambient theme mode and state:
+        - "ambient":
+            * If playing media with artwork: Dominant vibrant cover art accent.
+            * If glowing / alert / notification: Current dynamic plasma glow (_current_glow_c1).
+            * If idle: Signature ambient reactive glow (magenta-cyan plasma / _current_glow_c1).
+        - "solid":
+            * Derived from _solid_color. Dark neutrals (obsidian/titanium) map to vibrant
+              luminous ice-cyan/azure (#00F2FE / #38BDF8). Color tones (blue, emerald,
+              amethyst, ruby, amber) are luminance-boosted for high-contrast legibility.
+        - "gradient":
+            * Derived from _gradient_c1 / _gradient_c2 with luminance boost.
+        """
+        bg_style = getattr(self, "_bg_style", "ambient")
+
+        # 1. Solid Mode
+        if bg_style == "solid" and hasattr(self, "_solid_color"):
+            sc = self._solid_color
+            h, s, v, _ = sc.getHsv()
+            # If low saturation (blacks, dark grays, slate titanium)
+            if s < 35:
+                hex_name = sc.name().lower()
+                if hex_name in ("#08080c", "#000000", "#050505", "#0a0a0e"):
+                    return QColor("#00F2FE")  # Luminous Apple Cyan
+                elif hex_name in ("#1a1c24", "#181a22", "#1f2937", "#334155", "#35343b", "#393840"):
+                    return QColor("#7DD3FC")  # Frosted Titanium Ice
+                return QColor("#38BDF8")
+            # Saturated solid colors (e.g. Midnight Blue, Deep Emerald, Royal Amethyst)
+            v_boosted = max(v, 235)
+            s_boosted = max(min(s, 220), 125)
+            return QColor.fromHsv(h, s_boosted, v_boosted)
+
+        # 2. Gradient Mode
+        if bg_style == "gradient" and hasattr(self, "_gradient_c1"):
+            g1 = getattr(self, "_gradient_c1", QColor(255, 67, 168))
+            h, s, v, _ = g1.getHsv()
+            return QColor.fromHsv(h, max(min(s, 220), 125), max(v, 235))
+
+        # 3. Ambient Reactive Mode
+        # If media is actively playing and has extracted accent
+        is_playing = bool(self._media_info.get("is_playing", False))
+        accent_hex = self._media_info.get("accent_color")
+        if is_playing and accent_hex:
+            try:
+                c = QColor(accent_hex)
+                if c.isValid():
+                    h, s, v, _ = c.getHsv()
+                    return QColor.fromHsv(h, max(min(s, 225), 130), max(v, 235))
+            except Exception:
+                pass
+
+        if hasattr(self, "_active_vibrant_c") and self._active_vibrant_c and self._active_vibrant_c.isValid():
+            h, s, v, _ = self._active_vibrant_c.getHsv()
+            return QColor.fromHsv(h, max(min(s, 225), 130), max(v, 235))
+
+        # Check current active glow if non-idle
+        if hasattr(self, "_current_glow_c1") and getattr(self, "_glow_state", "idle") != "idle":
+            gc = self._current_glow_c1
+            h, s, v, _ = gc.getHsv()
+            if s > 30:
+                return QColor.fromHsv(h, max(min(s, 220), 120), max(v, 235))
+
+        # Ambient Reactive Idle Default: Luminous Apple/VisionOS ambient cyan
+        return QColor("#00F2FE")
+
     def _get_time_colors(self) -> Tuple[QColor, QColor]:
         """
-        Returns (col_hr, col_min) for prominent dual-color clock rendering.
-        Hours: Crisp pure white (#FFFFFF).
-        Minutes: Vibrant accent color derived from track artwork, or dynamic amber (#FF9F0A).
+        Returns (col_hr, col_min) for prominent dual-color clock rendering,
+        dynamically adapting to the ambient color and active ambient color mode.
         """
-        col_hr = QColor(255, 255, 255)
-        accent_hex = self._media_info.get("accent_color")
-        if accent_hex and self._media_info.get("is_playing", False):
-            c = QColor(accent_hex)
-            h, s, v, _ = c.getHsv()
-            v = max(v, 225)
-            s = max(min(s, 220), 130)
-            col_min = QColor.fromHsv(h, s, v)
+        ambient_col = self.get_ambient_color()
+        h, s, v, _ = ambient_col.getHsv()
+
+        # For blues/purples (hues between 210 and 295), tune saturation and set value to max
+        # to ensure high luminance contrast (WCAG AAA) on dark glass
+        if 210 <= h <= 295:
+            s_min = max(min(s, 135), 85)
+            v_min = 255
         else:
-            col_min = QColor("#FF9F0A")  # Apple Watch vibrant amber
+            s_min = max(min(s, 220), 120)
+            v_min = max(v, 235)
+
+        col_min = QColor.fromHsv(h, s_min, v_min)
+
+        # Hours (col_hr): Crisp luminous white with a delicate ambient tone reflection
+        col_hr = QColor.fromHsv(h, max(8, min(s_min // 6, 25)), 255)
+
         return col_hr, col_min
 
     def _get_24h_time_parts(self) -> Tuple[str, str]:
@@ -1914,10 +1987,8 @@ class DynamicIslandWidget(QWidget):
     def _on_battery_tick(self, info: dict):
         self._battery_info = info
         pct = info.get("percent", 99)
-        plugged = info.get("is_plugged", False)
-        icon = "🗲" if plugged else "🔋"
         if hasattr(self, "lbl_exp_battery") and self.lbl_exp_battery is not None:
-            self.lbl_exp_battery.setText(f"{icon} {pct}%")
+            self.lbl_exp_battery.setText(f"{pct}%")
         self.update()
 
     def _tick_live_progress(self):
@@ -3614,7 +3685,7 @@ class DynamicIslandWidget(QWidget):
         cur_x = content_left + hh_w
         if mm:
             colon_w = fm_time.horizontalAdvance(":")
-            painter.setPen(QColor(255, 255, 255, 140))
+            painter.setPen(QColor(col_min.red(), col_min.green(), col_min.blue(), 180))
             painter.drawText(QRectF(cur_x, y_text, colon_w + 1.0, text_h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, ":")
             cur_x += colon_w
 
@@ -3631,15 +3702,43 @@ class DynamicIslandWidget(QWidget):
             right_offset = content_right
             pct = self._battery_info.get("percent", 100)
             plugged = self._battery_info.get("is_plugged", False)
-            batt_text = f"{pct}% ⚡" if plugged else f"{pct}%"
+            batt_text = f"{pct}%"
 
             batt_font = get_microlabel_font()
             painter.setFont(batt_font)
-            painter.setPen(QColor(255, 255, 255, 180))
             fm_b = QFontMetrics(batt_font)
             bw = fm_b.horizontalAdvance(batt_text)
-            batt_rect = QRectF(right_offset - bw, (h - fm_b.height()) / 2.0, bw + 2.0, fm_b.height())
-            painter.drawText(batt_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, batt_text)
+
+            if plugged:
+                # Render clean anti-aliased vector charging lightning bolt (Rule 1: Zero System Emojis)
+                bolt_w = 7.0
+                bolt_h = 10.0
+                total_w = bw + bolt_w + 4.0
+                text_rect = QRectF(right_offset - total_w, (h - fm_b.height()) / 2.0, bw + 2.0, fm_b.height())
+                painter.setPen(QColor(255, 255, 255, 180))
+                painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, batt_text)
+
+                bolt_x = right_offset - bolt_w
+                bolt_y = (h - bolt_h) / 2.0
+                bolt_path = QPainterPath()
+                bolt_path.moveTo(bolt_x + 4.0, bolt_y)
+                bolt_path.lineTo(bolt_x + 1.0, bolt_y + 5.0)
+                bolt_path.lineTo(bolt_x + 3.8, bolt_y + 5.0)
+                bolt_path.lineTo(bolt_x + 3.0, bolt_y + 10.0)
+                bolt_path.lineTo(bolt_x + 7.0, bolt_y + 4.2)
+                bolt_path.lineTo(bolt_x + 4.2, bolt_y + 4.2)
+                bolt_path.closeSubpath()
+
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(QColor("#4EDEA3")))
+                painter.drawPath(bolt_path)
+                painter.restore()
+            else:
+                painter.setPen(QColor(255, 255, 255, 180))
+                batt_rect = QRectF(right_offset - bw, (h - fm_b.height()) / 2.0, bw + 2.0, fm_b.height())
+                painter.drawText(batt_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, batt_text)
             return
 
         # ── Album Art Squircle (20×20 for music, 28×16 for video) ───
@@ -3866,19 +3965,12 @@ class DynamicIslandWidget(QWidget):
             painter.setPen(QPen(icon_fill, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             painter.drawLine(QPointF(cx - 2.0, cy - 5.5), QPointF(cx + 5.5, cy - 7.5))
 
-        else:  # Bell (default / system)
-            bell = QPainterPath()
-            bell.addEllipse(QPointF(cx, cy - 7.2), 1.5, 1.5)
-            bell.moveTo(cx - 3.2, cy - 5.0)
-            bell.quadTo(cx - 4.0, cy + 0.5, cx - 7.5, cy + 4.2)
-            bell.lineTo(cx + 7.5, cy + 4.2)
-            bell.quadTo(cx + 4.0, cy + 0.5, cx + 3.2, cy - 5.0)
-            bell.closeSubpath()
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QBrush(icon_fill))
-            painter.drawPath(bell)
-
-            painter.drawEllipse(QPointF(cx, cy + 5.8), 1.6, 1.6)
+        else:  # Canonical Uniform Clean Notification Symbol (AGENTS.md & DESIGN.md)
+            try:
+                from services.icon_service import paint_uniform_notification_symbol
+                paint_uniform_notification_symbol(painter, cx, cy, s=26.0, accent_col=accent_col, icon_fill=icon_fill)
+            except Exception:
+                pass
 
         painter.restore()
 
@@ -3953,7 +4045,8 @@ class DynamicIslandWidget(QWidget):
         if app_icon is None or (hasattr(app_icon, "isNull") and app_icon.isNull()):
             try:
                 from services.icon_service import get_app_icon
-                app_icon = get_app_icon(raw_app, target_size=int(badge_size))
+                sc = getattr(self, "_solid_color", None) if getattr(self, "_bg_style", "ambient") == "solid" else None
+                app_icon = get_app_icon(raw_app, target_size=int(badge_size), accent_color=accent_col, solid_color=sc)
                 self._toast_info["app_icon"] = app_icon
             except Exception:
                 app_icon = None
@@ -4071,7 +4164,8 @@ class DynamicIslandWidget(QWidget):
         if app_icon is None or (hasattr(app_icon, "isNull") and app_icon.isNull()):
             try:
                 from services.icon_service import get_app_icon
-                app_icon = get_app_icon(raw_app, target_size=int(badge_size))
+                sc = getattr(self, "_solid_color", None) if getattr(self, "_bg_style", "ambient") == "solid" else None
+                app_icon = get_app_icon(raw_app, target_size=int(badge_size), accent_color=accent_col, solid_color=sc)
                 self._toast_info["app_icon"] = app_icon
             except Exception:
                 app_icon = None
@@ -4286,7 +4380,8 @@ class DynamicIslandWidget(QWidget):
         if app_icon is None or (hasattr(app_icon, "isNull") and app_icon.isNull()):
             try:
                 from services.icon_service import get_app_icon
-                app_icon = get_app_icon(raw_app, target_size=int(badge_size))
+                sc = getattr(self, "_solid_color", None) if getattr(self, "_bg_style", "ambient") == "solid" else None
+                app_icon = get_app_icon(raw_app, target_size=int(badge_size), accent_color=accent_col, solid_color=sc)
                 self._toast_info["app_icon"] = app_icon
             except Exception:
                 app_icon = None
@@ -4473,7 +4568,7 @@ class DynamicIslandWidget(QWidget):
         f_batt = get_microlabel_font()
         painter.setFont(f_batt)
         painter.setPen(COLOR_TEXT_PRIMARY)
-        batt_str = f"⚡ {dev_batt}% • Ready"
+        batt_str = f"{dev_batt}% • Ready"
         painter.drawText(QRectF(badge_x, badge_y, badge_w, badge_h), Qt.AlignmentFlag.AlignCenter, batt_str)
 
         # Audio routing pill at bottom

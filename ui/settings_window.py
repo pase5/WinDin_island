@@ -149,6 +149,9 @@ class GeneralNotchPreview(QWidget):
         self.setFixedHeight(96)
         self._is_expanded = False
         self._time_str = "19:30"
+        self._theme_mode = "ambient"
+        self._solid_color = QColor("#08080C")
+        self._ambient_opacity = 0.25
 
     def set_expanded(self, expanded: bool):
         self._is_expanded = expanded
@@ -157,6 +160,45 @@ class GeneralNotchPreview(QWidget):
     def set_time_str(self, time_str: str):
         self._time_str = time_str
         self.update()
+
+    def update_theme(self, mode: str, opacity: float = 0.25, solid_col: Optional[QColor] = None):
+        self._theme_mode = mode
+        self._ambient_opacity = opacity
+        if solid_col:
+            self._solid_color = solid_col
+        self.update()
+
+    def _get_time_colors(self) -> Tuple[QColor, QColor]:
+        if self._theme_mode == "solid" and hasattr(self, "_solid_color"):
+            sc = self._solid_color
+            h, s, v, _ = sc.getHsv()
+            if s < 35:
+                hex_name = sc.name().lower()
+                if hex_name in ("#08080c", "#000000", "#050505", "#0a0a0e"):
+                    ambient_col = QColor("#00F2FE")
+                elif hex_name in ("#1a1c24", "#181a22", "#1f2937", "#334155", "#35343b", "#393840"):
+                    ambient_col = QColor("#7DD3FC")
+                else:
+                    ambient_col = QColor("#38BDF8")
+            else:
+                ambient_col = QColor.fromHsv(h, max(min(s, 220), 125), max(v, 235))
+        else:
+            ambient_col = QColor("#00F2FE")
+
+        h, s, v, _ = ambient_col.getHsv()
+
+        # For blues/purples (hues between 210 and 295), tune saturation and set value to max
+        # to ensure high luminance contrast (WCAG AAA) on dark glass
+        if 210 <= h <= 295:
+            s_min = max(min(s, 135), 85)
+            v_min = 255
+        else:
+            s_min = max(min(s, 220), 120)
+            v_min = max(v, 235)
+
+        col_min = QColor.fromHsv(h, s_min, v_min)
+        col_hr = QColor.fromHsv(h, max(8, min(s_min // 6, 25)), 255)
+        return col_hr, col_min
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -172,22 +214,27 @@ class GeneralNotchPreview(QWidget):
         painter.setPen(QPen(QColor(255, 255, 255, 15), 1.0))
         painter.drawPath(well_path)
 
+        col_hr, col_min = self._get_time_colors()
+
         # Ambient Glow behind pill
         glow_rad = QRadialGradient(w / 2.0, 32.0, 100.0)
-        glow_rad.setColorAt(0.0, QColor(255, 67, 168, 45))
+        glow_rad.setColorAt(0.0, QColor(col_min.red(), col_min.green(), col_min.blue(), 45))
         glow_rad.setColorAt(1.0, QColor(14, 14, 20, 0))
         painter.setBrush(QBrush(glow_rad))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(int(w / 2.0 - 90), 8, 180, 50)
 
         # Island Pill
-        pill_w = 260.0 if self._is_expanded else 115.0
+        pill_w = 260.0 if self._is_expanded else 125.0
         pill_h = 32.0
         pill_x = (w - pill_w) / 2.0
         pill_y = 16.0
         pill_rect = QRectF(pill_x, pill_y, pill_w, pill_h)
 
-        painter.setBrush(QBrush(QColor("#1F1F26")))
+        if self._theme_mode == "solid" and hasattr(self, "_solid_color"):
+            painter.setBrush(QBrush(self._solid_color))
+        else:
+            painter.setBrush(QBrush(QColor("#1F1F26")))
         painter.setPen(QPen(QColor(255, 255, 255, 30), 1.0))
         painter.drawRoundedRect(pill_rect, 16.0, 16.0)
 
@@ -196,15 +243,36 @@ class GeneralNotchPreview(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(int(pill_x + 14), int(pill_y + 12), 8, 8)
 
-        # Clock Text
-        painter.setPen(QColor("#E4E1EA"))
+        # Clock Text with dual-tone ambient reactive colors
         font = QFont("Segoe UI", 10, QFont.Weight.DemiBold)
         painter.setFont(font)
-        painter.drawText(int(pill_x + 30), int(pill_y + 21), self._time_str)
+        fm = QFontMetrics(font)
+
+        if ":" in self._time_str:
+            parts = self._time_str.split(":")
+            hh = parts[0]
+            mm_part = parts[1]
+            hh_w = fm.horizontalAdvance(hh)
+            col_w = fm.horizontalAdvance(":")
+            cur_tx = pill_x + 30
+
+            painter.setPen(col_hr)
+            painter.drawText(int(cur_tx), int(pill_y + 21), hh)
+            cur_tx += hh_w
+
+            painter.setPen(QColor(col_min.red(), col_min.green(), col_min.blue(), 180))
+            painter.drawText(int(cur_tx), int(pill_y + 21), ":")
+            cur_tx += col_w
+
+            painter.setPen(col_min)
+            painter.drawText(int(cur_tx), int(pill_y + 21), mm_part)
+        else:
+            painter.setPen(col_hr)
+            painter.drawText(int(pill_x + 30), int(pill_y + 21), self._time_str)
 
         if self._is_expanded:
             # Expanded media badge text
-            painter.setPen(QColor("#FF43A8"))
+            painter.setPen(col_min)
             f2 = QFont("Segoe UI", 9, QFont.Weight.DemiBold)
             painter.setFont(f2)
             painter.drawText(int(pill_x + 92), int(pill_y + 20), "• Now Playing")
@@ -212,7 +280,7 @@ class GeneralNotchPreview(QWidget):
             # Mini visualizer
             painter.setBrush(QBrush(QColor("#4EDEA3")))
             painter.drawRoundedRect(int(pill_x + pill_w - 30), int(pill_y + 11), 3, 10, 1.5, 1.5)
-            painter.setBrush(QBrush(QColor("#FF43A8")))
+            painter.setBrush(QBrush(col_min))
             painter.drawRoundedRect(int(pill_x + pill_w - 24), int(pill_y + 8), 3, 16, 1.5, 1.5)
             painter.setBrush(QBrush(QColor("#DDB8FF")))
             painter.drawRoundedRect(int(pill_x + pill_w - 18), int(pill_y + 12), 3, 8, 1.5, 1.5)
@@ -1042,6 +1110,7 @@ class SettingsWindow(QMainWindow):
             ("🔑", "#4EDEA3", "Two-Factor OTP Code", "Simulate 2FA verification code card with one-click copy button", lambda: self._sim_call("otp")),
             ("📁", "#DDB8FF", "File Shelf Drag Tray", "Simulate liquid drag-and-drop file stash tray", lambda: self._sim_call("shelf")),
             ("⬇️", "#FFB0CF", "Download Hairline Progress", "Simulate animated sub-2px progress line along bottom curve", lambda: self._sim_call("download")),
+            ("🔔", "#00F2FE", "System Notification Toast", "Simulate clean uniform notification chime alert", lambda: self._sim_call("notif_toast")),
             ("📸", "#DDB8FF", "Snipping Tool Toast", "Simulate screenshot notification toast", lambda: self._sim_call("snip_toast")),
             ("📅", "#4EDEA3", "Calendar Event Toast", "Simulate calendar reminder alert toast", lambda: self._sim_call("cal_toast")),
             ("🎵", "#FF43A8", "Demo Music Track", "Toggle demo audio track to test cover art & visualizer", lambda: self._sim_call("demo_music")),
@@ -1246,6 +1315,7 @@ class SettingsWindow(QMainWindow):
         op = float(self.cfg.get("ambient_opacity", 0.25))
         sol = QColor(str(self.cfg.get("solid_color", "#08080C")))
         self.app_notch_preview.update_theme(theme, op, sol)
+        self.gen_notch_preview.update_theme(theme, op, sol)
 
     def _on_toggle_expand(self):
         if self.island:
@@ -1288,16 +1358,19 @@ class SettingsWindow(QMainWindow):
             if self.island:
                 self.island.set_theme_ambient(op)
             self.app_notch_preview.update_theme("ambient", op)
+            self.gen_notch_preview.update_theme("ambient", op)
         elif mode == "obsidian":
             c = QColor("#08080C")
             if self.island:
                 self.island.set_theme_solid(c)
             self.app_notch_preview.update_theme("solid", 0.0, c)
+            self.gen_notch_preview.update_theme("solid", 0.0, c)
         elif mode == "titanium":
             c = QColor("#181A22")
             if self.island:
                 self.island.set_theme_solid(c)
             self.app_notch_preview.update_theme("solid", 0.15, c)
+            self.gen_notch_preview.update_theme("solid", 0.15, c)
 
     def _set_solid_color(self, hex_code: str):
         c = QColor(hex_code)
@@ -1307,6 +1380,7 @@ class SettingsWindow(QMainWindow):
         if self.island:
             self.island.set_theme_solid(c)
         self.app_notch_preview.update_theme("solid", 0.0, c)
+        self.gen_notch_preview.update_theme("solid", 0.0, c)
         self.btn_obsidian.setChecked(True)
 
     def _pick_custom_color(self):
@@ -1323,6 +1397,7 @@ class SettingsWindow(QMainWindow):
             self.island.set_ambient_opacity(op)
         mode = self.cfg.get("theme_mode", "ambient")
         self.app_notch_preview.update_theme(mode, op)
+        self.gen_notch_preview.update_theme(mode, op)
 
     def _set_dock(self, edge: str):
         self.cfg["dock_edge"] = edge
@@ -1405,6 +1480,9 @@ class SettingsWindow(QMainWindow):
                 self.island.set_download_progress(0.75)
             else:
                 self._send_http_cmd("/api/simulate?kind=download")
+        elif kind == "notif_toast":
+            if self.system_service:
+                self.system_service.trigger_test_notification("Notification", "System Alert", "WindowLand Dynamic Island v2.0 is active.")
         elif kind == "snip_toast":
             if self.system_service:
                 self.system_service.trigger_test_notification("Snipping Tool", "Screenshot copied to clipboard", "Saved to screenshots folder.")

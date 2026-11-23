@@ -18,7 +18,7 @@ from typing import Optional, Dict
 
 from PyQt6.QtCore import Qt, QRectF, QPointF
 from PyQt6.QtGui import (
-    QPixmap, QImage, QPainter, QColor, QPen, QBrush, QPainterPath, QLinearGradient
+    QPixmap, QImage, QPainter, QColor, QPen, QBrush, QPainterPath, QLinearGradient, QRadialGradient
 )
 
 # In-memory cache: app_name_normalized -> QPixmap
@@ -221,13 +221,162 @@ def _find_installed_app_path(app_name: str) -> Optional[str]:
     return None
 
 
-def _render_vector_brand_logo(app_name: str, size: int = 48) -> Optional[QPixmap]:
+def paint_uniform_notification_symbol(
+    painter: QPainter,
+    cx: float,
+    cy: float,
+    s: float,
+    accent_col: Optional[QColor] = None,
+    icon_fill: Optional[QColor] = None,
+    with_beacon: bool = True
+):
+    """
+    Renders the canonical WindowLand uniform notification chime symbol.
+    Strictly adheres to AGENTS.md (Rule 1: Zero System Emojis) and DESIGN.md (continuous Bézier fillets).
+    Optically centered with subpixel antialiasing at (cx, cy) over span s.
+    """
+    if accent_col is None:
+        accent_col = QColor("#00F2FE")
+    if icon_fill is None:
+        icon_fill = QColor(255, 255, 255, 248)
+
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+    # 1. Top Suspension Finial Loop / Crown
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QBrush(icon_fill))
+    painter.drawEllipse(QPointF(cx, cy - 0.22 * s), 0.045 * s, 0.045 * s)
+
+    # 2. Bell Flared Mantle Path (C1 continuous Béziers)
+    bell = QPainterPath()
+    bell.moveTo(cx - 0.075 * s, cy - 0.17 * s)
+    bell.cubicTo(
+        cx - 0.09 * s, cy - 0.04 * s,
+        cx - 0.14 * s, cy + 0.08 * s,
+        cx - 0.24 * s, cy + 0.15 * s
+    )
+    # Bottom curved lip connecting left to right
+    bell.quadTo(cx, cy + 0.175 * s, cx + 0.24 * s, cy + 0.15 * s)
+    # Right flank
+    bell.cubicTo(
+        cx + 0.14 * s, cy + 0.08 * s,
+        cx + 0.09 * s, cy - 0.04 * s,
+        cx + 0.075 * s, cy - 0.17 * s
+    )
+    bell.closeSubpath()
+    painter.drawPath(bell)
+
+    # 3. Horizontal Lip Rim Bead
+    lip_path = QPainterPath()
+    lip_path.addRoundedRect(QRectF(cx - 0.25 * s, cy + 0.125 * s, 0.50 * s, 0.055 * s), 0.025 * s, 0.025 * s)
+    painter.drawPath(lip_path)
+
+    # 4. Centered Clapper Drop Bead
+    painter.drawEllipse(QPointF(cx, cy + 0.22 * s), 0.052 * s, 0.052 * s)
+
+    # 5. Active Notification Signal Ping / Beacon
+    if with_beacon:
+        ping_cx = cx + 0.21 * s
+        ping_cy = cy - 0.19 * s
+        ping_r = 0.065 * s
+
+        # Outer soft aura halo
+        ping_aura = QRadialGradient(QPointF(ping_cx, ping_cy), ping_r * 2.2)
+        ping_aura.setColorAt(0.0, QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 120))
+        ping_aura.setColorAt(0.5, QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 30))
+        ping_aura.setColorAt(1.0, QColor(0, 0, 0, 0))
+        painter.setBrush(QBrush(ping_aura))
+        painter.drawEllipse(QPointF(ping_cx, ping_cy), ping_r * 2.2, ping_r * 2.2)
+
+        # Inner solid beacon
+        painter.setBrush(QBrush(accent_col))
+        painter.drawEllipse(QPointF(ping_cx, ping_cy), ping_r, ping_r)
+
+        # Micro white specular glint on beacon
+        painter.setBrush(QColor(255, 255, 255, 210))
+        painter.drawEllipse(QPointF(ping_cx - ping_r * 0.25, ping_cy - ping_r * 0.25), ping_r * 0.35, ping_r * 0.35)
+
+    painter.restore()
+
+
+def render_uniform_notification_icon(
+    size: int = 48,
+    accent_col: Optional[QColor] = None,
+    solid_col: Optional[QColor] = None
+) -> QPixmap:
+    """
+    Renders the complete high-resolution uniform notification tile icon.
+    Follows DESIGN.md Section 4.3 (Corner Squircle Superellipse r = 0.25 * size,
+    diagonal 2.5D specular highlight sheen, and atmospheric underglow).
+    """
+    if accent_col is None:
+        accent_col = QColor("#00F2FE")
+
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
+    s = float(size)
+    rect = QRectF(0, 0, s, s)
+    cx = s / 2.0
+    cy = s / 2.0
+
+    r_corner = s * 0.25
+
+    # Background tile gradient
+    if solid_col:
+        tile_grad = QLinearGradient(0, 0, 0, s)
+        tile_grad.setColorAt(0.0, solid_col.lighter(130))
+        tile_grad.setColorAt(1.0, solid_col.darker(110))
+        border_col = solid_col.lighter(160)
+        border_col.setAlpha(120)
+    else:
+        tile_grad = QLinearGradient(0, 0, 0, s)
+        tile_grad.setColorAt(0.0, QColor(24, 28, 42, 245))
+        tile_grad.setColorAt(1.0, QColor(10, 12, 20, 252))
+        border_col = QColor(255, 255, 255, 38)
+
+    p.setPen(QPen(border_col, 1.0))
+    p.setBrush(QBrush(tile_grad))
+    p.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), r_corner, r_corner)
+
+    # Specular 2.5D diagonal glass sheen
+    sheen = QLinearGradient(0, 0, s * 0.8, s * 0.8)
+    sheen.setColorAt(0.0, QColor(255, 255, 255, 45))
+    sheen.setColorAt(0.4, QColor(255, 255, 255, 12))
+    sheen.setColorAt(1.0, QColor(255, 255, 255, 0))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(sheen))
+    p.drawRoundedRect(rect.adjusted(1.0, 1.0, -1.0, -1.0), r_corner, r_corner)
+
+    # Ambient radial backlight aura
+    aura = QRadialGradient(QPointF(cx, cy * 0.9), s * 0.45)
+    aura.setColorAt(0.0, QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 35))
+    aura.setColorAt(0.6, QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 8))
+    aura.setColorAt(1.0, QColor(0, 0, 0, 0))
+    p.setBrush(QBrush(aura))
+    p.drawRect(rect)
+
+    # Uniform notification symbol
+    paint_uniform_notification_symbol(p, cx, cy, s, accent_col=accent_col, with_beacon=True)
+
+    p.end()
+    return pix
+
+
+def _render_vector_brand_logo(app_name: str, size: int = 48, accent_col: Optional[QColor] = None) -> Optional[QPixmap]:
     """
     Renders an anti-aliased vector brand logo for common apps
     when native .exe is not locally installed (e.g., phone bridge notifications).
     Strictly follows AGENTS.md Rule 1 (Zero emojis, 100% clean vector paths).
     """
     app_lower = app_name.lower().strip()
+    if any(k in app_lower for k in ("notification", "notifications", "alert", "alerts", "system alert", "system", "bell")):
+        return render_uniform_notification_icon(size=size, accent_col=accent_col)
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
 
@@ -400,37 +549,36 @@ def _render_vector_brand_logo(app_name: str, size: int = 48) -> Optional[QPixmap
         p.drawRoundedRect(QRectF(s * 0.67, s * 0.46, s * 0.11, s * 0.26), s * 0.05, s * 0.05)
 
     else:
-        # Default Sleek Ambient Pill Badge with app initial
-        grad = QLinearGradient(0, 0, s, s)
-        grad.setColorAt(0.0, QColor("#FF43A8"))
-        grad.setColorAt(1.0, QColor("#7C03D3"))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(grad))
-        p.drawRoundedRect(rect, s * 0.26, s * 0.26)
-
-        # Monogram letter
-        initial = (app_name[0] if app_name else "W").upper()
-        from PyQt6.QtGui import QFont
-        font = QFont("Segoe UI", int(s * 0.42), QFont.Weight.Bold)
-        p.setFont(font)
-        p.setPen(QColor(255, 255, 255))
-        p.drawText(rect, Qt.AlignmentFlag.AlignCenter, initial)
+        # Default fallback: Canonical Uniform Clean Notification Icon
+        return render_uniform_notification_icon(size=int(s), accent_col=accent_col)
 
     p.end()
     return pix
 
 
-def get_app_icon(app_name: str, target_size: int = 48) -> QPixmap:
+def get_app_icon(
+    app_name: str,
+    target_size: int = 48,
+    accent_color: Optional[QColor] = None,
+    solid_color: Optional[QColor] = None
+) -> QPixmap:
     """
     Main entry point for extracting and retrieving the official application logo.
     1. Checks in-memory cache
-    2. Searches for native Windows process / .lnk / .exe file
-    3. Extracts high-resolution Win32 HICON if found
-    4. Renders crisp vector brand glyph fallback if native file is not present
-    5. Returns smoothed QPixmap
+    2. Directly returns canonical uniform notification icon for system alerts / notifications
+    3. Searches for native Windows process / .lnk / .exe file
+    4. Extracts high-resolution Win32 HICON if found
+    5. Renders crisp vector brand glyph fallback if native file is not present
+    6. Returns smoothed QPixmap
     """
     clean_name = (app_name or "Notification").strip()
-    cache_key = clean_name.lower()
+    cache_key = f"{clean_name.lower()}_{target_size}"
+
+    # Return canonical uniform notification icon for generic/system notification alerts
+    if clean_name.lower() in ("notification", "notifications", "alert", "alerts", "system alert", "system", "windowland", "dynamicisland", "quick alert", "toast", ""):
+        uniform_icon = render_uniform_notification_icon(size=target_size, accent_col=accent_color, solid_col=solid_color)
+        _APP_ICON_CACHE[cache_key] = uniform_icon
+        return uniform_icon
 
     if cache_key in _APP_ICON_CACHE:
         cached = _APP_ICON_CACHE[cache_key]
@@ -452,12 +600,12 @@ def get_app_icon(app_name: str, target_size: int = 48) -> QPixmap:
             return scaled
 
     # 2. Render vector brand logo
-    vec_pix = _render_vector_brand_logo(clean_name, size=target_size)
+    vec_pix = _render_vector_brand_logo(clean_name, size=target_size, accent_col=accent_color)
     if vec_pix and not vec_pix.isNull():
         _APP_ICON_CACHE[cache_key] = vec_pix
         return vec_pix
 
-    # 3. Fallback generic app icon
-    fallback = _render_vector_brand_logo("WindowLand", size=target_size)
+    # 3. Fallback canonical uniform notification icon
+    fallback = render_uniform_notification_icon(size=target_size, accent_col=accent_color, solid_col=solid_color)
     _APP_ICON_CACHE[cache_key] = fallback
     return fallback
