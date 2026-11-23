@@ -910,7 +910,8 @@ class DynamicIslandWidget(QWidget):
                 w = CORNER_COMPACT_MUSIC_W if has_media else CORNER_COMPACT_IDLE_W
                 h = CORNER_COMPACT_MUSIC_H if has_media else CORNER_COMPACT_IDLE_H
             elif state == "toast":
-                w = h = CORNER_TOAST_SIZE
+                w = 260
+                h = 200
             elif state == "device_popup":
                 w = h = CORNER_DEVICE_POPUP_SIZE
             elif state == "osd_hud":
@@ -2436,9 +2437,13 @@ class DynamicIslandWidget(QWidget):
                     self.collapse_to_compact()
                     return
 
-            # 6. Check Toast Close
-            if self._island_state == "toast" and hasattr(self, "_toast_close_rect"):
-                if self._toast_close_rect.contains(pos):
+            # 6. Check Toast Close / Tap to Dismiss
+            if self._island_state == "toast":
+                if hasattr(self, "_toast_close_rect") and self._toast_close_rect.contains(pos):
+                    self.collapse_to_compact()
+                    return
+                notch_p = self._create_notch_path(float(self.width()), float(self.height()))
+                if notch_p.contains(pos):
                     self.collapse_to_compact()
                     return
 
@@ -2844,7 +2849,15 @@ class DynamicIslandWidget(QWidget):
             base_r_ear = NOTCH_RADIUS_TOP
 
         # Smoothly interpolate corner radius with expand_progress so it never pops
-        r_bot = NOTCH_RADIUS_BOT + (target_r_bot - NOTCH_RADIUS_BOT) * p
+        if self._island_state == "compact":
+            r_bot = NOTCH_RADIUS_BOT
+        elif self._island_state == "expanded":
+            r_bot = NOTCH_RADIUS_BOT + (target_r_bot - NOTCH_RADIUS_BOT) * p
+        else:
+            r_bot = target_r_bot
+
+        is_corner_card = self._island_state in ("toast", "device_popup", "osd_hud", "call_live", "otp_pill", "file_shelf") or \
+                         getattr(self, "_anim_target_state", "") in ("toast", "device_popup", "osd_hud", "call_live", "otp_pill", "file_shelf")
 
         path = QPainterPath()
 
@@ -2960,125 +2973,181 @@ class DynamicIslandWidget(QWidget):
 
         elif edge in ("top-left", "corner-tl"):
             r_ear = base_r_ear * morph
+            max_dim = max(4.0, min(w, h) - 2.0)
+            if r_ear + r_bot > max_dim:
+                scale = max_dim / (r_ear + r_bot)
+                r_ear = max(1.0, r_ear * scale)
+                r_bot = max(1.0, r_bot * scale)
+
             if r_ear > 0.5:
                 p = self.get_expand_progress()
-                arm_w = CORNER_ARM_THICKNESS
-                arm_h = CORNER_ARM_THICKNESS
-                r_in = min(CORNER_INNER_RADIUS, arm_w * 0.45) * (1.0 - p)
-                r_b = min(r_bot, 12.0) * (1.0 - p) + r_bot * p
+                is_bracket = (self._island_state == "compact" or (self._island_state == "expanded" and p < 0.98)) and not is_corner_card
 
-                hx = arm_w + (w - r_ear - r_bot - arm_w) * p
-                hy = arm_h + (h - r_ear - r_bot - arm_h) * p
+                if is_bracket:
+                    arm_w = CORNER_ARM_THICKNESS
+                    arm_h = CORNER_ARM_THICKNESS
+                    r_in = min(CORNER_INNER_RADIUS, arm_w * 0.45) * (1.0 - p)
+                    r_b = min(r_bot, 12.0) * (1.0 - p) + r_bot * p
 
-                path.moveTo(0, 0)
-                path.lineTo(w, 0)
-                path.cubicTo(w - r_ear * 0.4, 0, w - r_ear, r_ear * 0.4, w - r_ear, r_ear)
-                if p < 0.98:
+                    hx = arm_w + (w - r_ear - r_bot - arm_w) * p
+                    hy = arm_h + (h - r_ear - r_bot - arm_h) * p
+
+                    path.moveTo(0, 0)
+                    path.lineTo(w, 0)
+                    path.cubicTo(w - r_ear * 0.4, 0, w - r_ear, r_ear * 0.4, w - r_ear, r_ear)
                     path.lineTo(w - r_ear, hy - r_b)
                     path.quadTo(w - r_ear, hy, w - r_ear - r_b, hy)
                     path.lineTo(hx + r_in, hy)
                     path.quadTo(hx, hy, hx, hy + r_in)
                     path.lineTo(hx, h - r_ear - r_b)
                     path.quadTo(hx, h - r_ear, hx - r_b, h - r_ear)
+                    path.lineTo(r_ear, h - r_ear)
+                    path.cubicTo(r_ear * 0.4, h - r_ear, 0, h - r_ear * 0.4, 0, h)
+                    path.lineTo(0, 0)
                 else:
+                    path.moveTo(0, 0)
+                    path.lineTo(w, 0)
+                    path.cubicTo(w - r_ear * 0.4, 0, w - r_ear, r_ear * 0.4, w - r_ear, r_ear)
                     path.lineTo(w - r_ear, h - r_ear - r_bot)
                     path.quadTo(w - r_ear, h - r_ear, w - r_ear - r_bot, h - r_ear)
-                path.lineTo(r_ear, h - r_ear)
-                path.cubicTo(r_ear * 0.4, h - r_ear, 0, h - r_ear * 0.4, 0, h)
-                path.lineTo(0, 0)
+                    path.lineTo(r_ear, h - r_ear)
+                    path.cubicTo(r_ear * 0.4, h - r_ear, 0, h - r_ear * 0.4, 0, h)
+                    path.lineTo(0, 0)
             else:
                 path.addRoundedRect(QRectF(0, 0, w, h), r_cap, r_cap)
 
         elif edge in ("top-right", "corner-tr"):
             r_ear = base_r_ear * morph
+            max_dim = max(4.0, min(w, h) - 2.0)
+            if r_ear + r_bot > max_dim:
+                scale = max_dim / (r_ear + r_bot)
+                r_ear = max(1.0, r_ear * scale)
+                r_bot = max(1.0, r_bot * scale)
+
             if r_ear > 0.5:
                 p = self.get_expand_progress()
-                arm_w = CORNER_ARM_THICKNESS
-                arm_h = CORNER_ARM_THICKNESS
-                r_in = min(CORNER_INNER_RADIUS, arm_w * 0.45) * (1.0 - p)
-                r_b = min(r_bot, 12.0) * (1.0 - p) + r_bot * p
+                is_bracket = (self._island_state == "compact" or (self._island_state == "expanded" and p < 0.98)) and not is_corner_card
 
-                hx = (w - arm_w) * (1.0 - p) + (r_ear + r_bot) * p
-                hy = arm_h + (h - r_ear - r_bot - arm_h) * p
+                if is_bracket:
+                    arm_w = CORNER_ARM_THICKNESS
+                    arm_h = CORNER_ARM_THICKNESS
+                    r_in = min(CORNER_INNER_RADIUS, arm_w * 0.45) * (1.0 - p)
+                    r_b = min(r_bot, 12.0) * (1.0 - p) + r_bot * p
 
-                path.moveTo(w, 0)
-                path.lineTo(0, 0)
-                path.cubicTo(r_ear * 0.4, 0, r_ear, r_ear * 0.4, r_ear, r_ear)
-                if p < 0.98:
+                    hx = (w - arm_w) * (1.0 - p) + (r_ear + r_bot) * p
+                    hy = arm_h + (h - r_ear - r_bot - arm_h) * p
+
+                    path.moveTo(w, 0)
+                    path.lineTo(0, 0)
+                    path.cubicTo(r_ear * 0.4, 0, r_ear, r_ear * 0.4, r_ear, r_ear)
                     path.lineTo(r_ear, hy - r_b)
                     path.quadTo(r_ear, hy, r_ear + r_b, hy)
                     path.lineTo(hx - r_in, hy)
                     path.quadTo(hx, hy, hx, hy + r_in)
                     path.lineTo(hx, h - r_ear - r_b)
                     path.quadTo(hx, h - r_ear, hx + r_b, h - r_ear)
+                    path.lineTo(w - r_ear, h - r_ear)
+                    path.cubicTo(w - r_ear * 0.4, h - r_ear, w, h - r_ear * 0.4, w, h)
+                    path.lineTo(w, 0)
                 else:
+                    path.moveTo(w, 0)
+                    path.lineTo(0, 0)
+                    path.cubicTo(r_ear * 0.4, 0, r_ear, r_ear * 0.4, r_ear, r_ear)
                     path.lineTo(r_ear, h - r_ear - r_bot)
                     path.quadTo(r_ear, h - r_ear, r_ear + r_bot, h - r_ear)
-                path.lineTo(w - r_ear, h - r_ear)
-                path.cubicTo(w - r_ear * 0.4, h - r_ear, w, h - r_ear * 0.4, w, h)
-                path.lineTo(w, 0)
+                    path.lineTo(w - r_ear, h - r_ear)
+                    path.cubicTo(w - r_ear * 0.4, h - r_ear, w, h - r_ear * 0.4, w, h)
+                    path.lineTo(w, 0)
             else:
                 path.addRoundedRect(QRectF(0, 0, w, h), r_cap, r_cap)
 
         elif edge in ("bottom-left", "corner-bl"):
             r_ear = base_r_ear * morph
+            max_dim = max(4.0, min(w, h) - 2.0)
+            if r_ear + r_bot > max_dim:
+                scale = max_dim / (r_ear + r_bot)
+                r_ear = max(1.0, r_ear * scale)
+                r_bot = max(1.0, r_bot * scale)
+
             if r_ear > 0.5:
                 p = self.get_expand_progress()
-                arm_w = CORNER_ARM_THICKNESS
-                arm_h = CORNER_ARM_THICKNESS
-                r_in = min(CORNER_INNER_RADIUS, arm_w * 0.45) * (1.0 - p)
-                r_b = min(r_bot, 12.0) * (1.0 - p) + r_bot * p
+                is_bracket = (self._island_state == "compact" or (self._island_state == "expanded" and p < 0.98)) and not is_corner_card
 
-                hx = arm_w + (w - r_ear - r_bot - arm_w) * p
-                hy = (h - arm_h) * (1.0 - p) + (r_ear + r_bot) * p
+                if is_bracket:
+                    arm_w = CORNER_ARM_THICKNESS
+                    arm_h = CORNER_ARM_THICKNESS
+                    r_in = min(CORNER_INNER_RADIUS, arm_w * 0.45) * (1.0 - p)
+                    r_b = min(r_bot, 12.0) * (1.0 - p) + r_bot * p
 
-                path.moveTo(0, h)
-                path.lineTo(w, h)
-                path.cubicTo(w - r_ear * 0.4, h, w - r_ear, h - r_ear * 0.4, w - r_ear, h - r_ear)
-                if p < 0.98:
+                    hx = arm_w + (w - r_ear - r_bot - arm_w) * p
+                    hy = (h - arm_h) * (1.0 - p) + (r_ear + r_bot) * p
+
+                    path.moveTo(0, h)
+                    path.lineTo(w, h)
+                    path.cubicTo(w - r_ear * 0.4, h, w - r_ear, h - r_ear * 0.4, w - r_ear, h - r_ear)
                     path.lineTo(w - r_ear, hy + r_b)
                     path.quadTo(w - r_ear, hy, w - r_ear - r_b, hy)
                     path.lineTo(hx + r_in, hy)
                     path.quadTo(hx, hy, hx, hy - r_in)
                     path.lineTo(hx, r_ear + r_b)
                     path.quadTo(hx, r_ear, hx - r_b, r_ear)
+                    path.lineTo(r_ear, r_ear)
+                    path.cubicTo(r_ear * 0.4, r_ear, 0, r_ear * 0.4, 0, 0)
+                    path.lineTo(0, h)
                 else:
+                    path.moveTo(0, h)
+                    path.lineTo(w, h)
+                    path.cubicTo(w - r_ear * 0.4, h, w - r_ear, h - r_ear * 0.4, w - r_ear, h - r_ear)
                     path.lineTo(w - r_ear, r_ear + r_bot)
                     path.quadTo(w - r_ear, r_ear, w - r_ear - r_bot, r_ear)
-                path.lineTo(r_ear, r_ear)
-                path.cubicTo(r_ear * 0.4, r_ear, 0, r_ear * 0.4, 0, 0)
-                path.lineTo(0, h)
+                    path.lineTo(r_ear, r_ear)
+                    path.cubicTo(r_ear * 0.4, r_ear, 0, r_ear * 0.4, 0, 0)
+                    path.lineTo(0, h)
             else:
                 path.addRoundedRect(QRectF(0, 0, w, h), r_cap, r_cap)
 
         elif edge in ("bottom-right", "corner-br"):
             r_ear = base_r_ear * morph
+            max_dim = max(4.0, min(w, h) - 2.0)
+            if r_ear + r_bot > max_dim:
+                scale = max_dim / (r_ear + r_bot)
+                r_ear = max(1.0, r_ear * scale)
+                r_bot = max(1.0, r_bot * scale)
+
             if r_ear > 0.5:
                 p = self.get_expand_progress()
-                arm_w = CORNER_ARM_THICKNESS
-                arm_h = CORNER_ARM_THICKNESS
-                r_in = min(CORNER_INNER_RADIUS, arm_w * 0.45) * (1.0 - p)
-                r_b = min(r_bot, 12.0) * (1.0 - p) + r_bot * p
+                is_bracket = (self._island_state == "compact" or (self._island_state == "expanded" and p < 0.98)) and not is_corner_card
 
-                hx = (w - arm_w) * (1.0 - p) + (r_ear + r_bot) * p
-                hy = (h - arm_h) * (1.0 - p) + (r_ear + r_bot) * p
+                if is_bracket:
+                    arm_w = CORNER_ARM_THICKNESS
+                    arm_h = CORNER_ARM_THICKNESS
+                    r_in = min(CORNER_INNER_RADIUS, arm_w * 0.45) * (1.0 - p)
+                    r_b = min(r_bot, 12.0) * (1.0 - p) + r_bot * p
 
-                path.moveTo(w, h)
-                path.lineTo(0, h)
-                path.cubicTo(r_ear * 0.4, h, r_ear, h - r_ear * 0.4, r_ear, h - r_ear)
-                if p < 0.98:
+                    hx = (w - arm_w) * (1.0 - p) + (r_ear + r_bot) * p
+                    hy = (h - arm_h) * (1.0 - p) + (r_ear + r_bot) * p
+
+                    path.moveTo(w, h)
+                    path.lineTo(0, h)
+                    path.cubicTo(r_ear * 0.4, h, r_ear, h - r_ear * 0.4, r_ear, h - r_ear)
                     path.lineTo(r_ear, hy + r_b)
                     path.quadTo(r_ear, hy, r_ear + r_b, hy)
                     path.lineTo(hx - r_in, hy)
                     path.quadTo(hx, hy, hx, hy - r_in)
                     path.lineTo(hx, r_ear + r_b)
                     path.quadTo(hx, r_ear, hx + r_b, r_ear)
+                    path.lineTo(w - r_ear, r_ear)
+                    path.cubicTo(w - r_ear * 0.4, r_ear, w, r_ear * 0.4, w, 0)
+                    path.lineTo(w, h)
                 else:
+                    path.moveTo(w, h)
+                    path.lineTo(0, h)
+                    path.cubicTo(r_ear * 0.4, h, r_ear, h - r_ear * 0.4, r_ear, h - r_ear)
                     path.lineTo(r_ear, r_ear + r_bot)
                     path.quadTo(r_ear, r_ear, r_ear + r_bot, r_ear)
-                path.lineTo(w - r_ear, r_ear)
-                path.cubicTo(w - r_ear * 0.4, r_ear, w, r_ear * 0.4, w, 0)
-                path.lineTo(w, h)
+                    path.lineTo(w - r_ear, r_ear)
+                    path.cubicTo(w - r_ear * 0.4, r_ear, w, r_ear * 0.4, w, 0)
+                    path.lineTo(w, h)
             else:
                 path.addRoundedRect(QRectF(0, 0, w, h), r_cap, r_cap)
 
@@ -4027,10 +4096,19 @@ class DynamicIslandWidget(QWidget):
             badge_base_bot = QColor(8, 16, 28, 250)
             tile_border = QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 100)
 
+        edge = getattr(self, "_dock_edge", "top-left")
+        is_right = edge in ("top-right", "corner-tr", "bottom-right", "corner-br")
+        is_bottom = edge in ("bottom-left", "corner-bl", "bottom-right", "corner-br")
+
+        pad_left = 24.0 if is_right else 20.0
+        pad_right = 20.0 if is_right else 24.0
+        pad_top = 22.0 if is_bottom else 18.0
+        content_w = w - pad_left - pad_right
+
         # 1. Top row: Icon Badge + App Name + Close Cross
         badge_size = 32.0
-        badge_x = 18.0
-        badge_y = 18.0
+        badge_x = pad_left
+        badge_y = pad_top
         badge_rect = QRectF(badge_x, badge_y, badge_size, badge_size)
 
         tile_grad = QLinearGradient(badge_x, badge_y, badge_x, badge_y + badge_size)
@@ -4066,12 +4144,12 @@ class DynamicIslandWidget(QWidget):
         # App name
         painter.setFont(get_subtext_font(10.0))
         painter.setPen(accent_col)
-        painter.drawText(QRectF(badge_x + badge_size + 8.0, badge_y + 8.0, w - badge_x - badge_size - 40.0, 16.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, app_name)
+        painter.drawText(QRectF(badge_x + badge_size + 8.0, badge_y + 8.0, content_w - badge_size - 36.0, 16.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, app_name)
 
         # Dismiss button (close cross)
-        cx_x = w - 24.0
-        cx_y = 22.0
-        self._toast_close_rect = QRectF(cx_x - 10.0, cx_y - 10.0, 20.0, 20.0)
+        cx_x = w - pad_right - 4.0
+        cx_y = pad_top + 14.0
+        self._toast_close_rect = QRectF(cx_x - 12.0, cx_y - 12.0, 24.0, 24.0)
         painter.save()
         close_pen = QPen(QColor(255, 255, 255, 240 if getattr(self, "_toast_close_hovered", False) else 130), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
         painter.setPen(close_pen)
@@ -4083,18 +4161,20 @@ class DynamicIslandWidget(QWidget):
         title_font = get_display_font(11.5)
         painter.setFont(title_font)
         painter.setPen(COLOR_TEXT_PRIMARY)
-        painter.drawText(QRectF(18.0, 60.0, w - 36.0, 38.0), Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, title)
+        painter.drawText(QRectF(pad_left, pad_top + badge_size + 10.0, content_w, 36.0), Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, title)
 
         if message:
             msg_font = get_subtext_font(10.0)
             painter.setFont(msg_font)
             painter.setPen(COLOR_TEXT_SECONDARY)
-            painter.drawText(QRectF(18.0, 104.0, w - 36.0, 72.0), Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, message)
+            msg_h = max(28.0, h - (pad_top + badge_size + 48.0) - 28.0)
+            painter.drawText(QRectF(pad_left, pad_top + badge_size + 48.0, content_w, msg_h), Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, message)
 
-        # 3. Bottom: "now" badge
+        # 3. Bottom: "now • tap to dismiss"
         painter.setFont(get_microlabel_font())
         painter.setPen(COLOR_TEXT_MUTED)
-        painter.drawText(QRectF(18.0, h - 26.0, w - 36.0, 14.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "now • tap to dismiss")
+        b_y = h - 22.0 if is_bottom else h - 20.0
+        painter.drawText(QRectF(pad_left, b_y, content_w, 14.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "now • tap to dismiss")
 
     def _paint_toast_side(self, painter: QPainter, w: float, h: float):
         """Vertical Notification Toast for Left / Right Bezels."""
