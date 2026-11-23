@@ -152,7 +152,11 @@ def _respawn_self():
         DETACHED_PROCESS = 0x00000008
         CREATE_NEW_PROCESS_GROUP = 0x00000200
         flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-        subprocess.Popen(target, creationflags=flags, close_fds=True)
+        env = os.environ.copy()
+        env.pop('_MEIPASS2', None)
+        env.pop('PYTHONPATH', None)
+        env.pop('PYTHONHOME', None)
+        subprocess.Popen(target, env=env, creationflags=flags, close_fds=True)
     except Exception as e:
         log_file = os.path.join(os.path.expanduser("~"), "DynamicIsland_crash.log")
         try:

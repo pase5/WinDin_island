@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QFrame, QProgressBar, QGraphicsOpacityEffect
 )
 from PyQt6.QtCore import (
-    Qt, QRectF, QPointF, QTimer, QPropertyAnimation,
+    Qt, QPoint, QPointF, QRectF, QTimer, QPropertyAnimation,
     QEasingCurve, pyqtSignal, pyqtProperty, QEvent
 )
 from PyQt6.QtGui import (
@@ -832,6 +832,8 @@ class DynamicIslandWidget(QWidget):
                 if not self.isVisible():
                     self.show()
                     self.raise_()
+        elif not self._is_fullscreen_suppressed and self.isVisible():
+            self._ensure_behind_taskbar()
 
     def wake_up(self):
         """Forces the Dynamic Island to become visible, raise to top, and expand."""
@@ -855,6 +857,42 @@ class DynamicIslandWidget(QWidget):
         self.setStyleSheet(DASHBOARD_STYLESHEET)
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
+
+    def _ensure_behind_taskbar(self):
+        """
+        Ensures Dynamic Island is placed immediately behind the Windows Taskbar in Z-order.
+        Keeps Dynamic Island topmost over all standard application windows, but allows the
+        Windows Taskbar (Shell_TrayWnd) to sit on top so taskbar icons are never obstructed.
+        """
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            tray = user32.FindWindowW("Shell_TrayWnd", None)
+            if not tray:
+                hdesk = user32.OpenDesktopW("default", 0, False, 0x01FF)
+                if hdesk:
+                    old_desk = user32.GetThreadDesktop(ctypes.windll.kernel32.GetCurrentThreadId())
+                    user32.SetThreadDesktop(hdesk)
+                    tray = user32.FindWindowW("Shell_TrayWnd", None)
+                    user32.SetThreadDesktop(old_desk)
+                    user32.CloseDesktop(hdesk)
+            if tray:
+                hwnd = int(self.winId())
+                if hwnd and tray != hwnd:
+                    SWP_NOMOVE = 0x0002
+                    SWP_NOSIZE = 0x0001
+                    SWP_NOACTIVATE = 0x0010
+                    user32.SetWindowPos(hwnd, tray, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+        except Exception:
+            pass
+
+    def raise_(self):
+        super().raise_()
+        self._ensure_behind_taskbar()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._ensure_behind_taskbar()
 
     def _get_target_rect(self, state: str) -> tuple[int, int, int, int]:
         cur_center = self.geometry().center()
@@ -1040,6 +1078,7 @@ class DynamicIslandWidget(QWidget):
     def _on_geo_anim_finished(self):
         target = getattr(self, "_anim_target_state", self._island_state)
         self._update_child_visibility(target)
+        self._ensure_behind_taskbar()
 
     def _apply_geometry_for_state(self, state: str, animate=True):
         x, y, w, h = self._get_target_rect(state)
@@ -1049,6 +1088,7 @@ class DynamicIslandWidget(QWidget):
             self.setGeometry(x, y, w, h)
             self.set_expand_progress(1.0 if state == "expanded" else 0.0)
             self._update_child_visibility(state)
+            self._ensure_behind_taskbar()
             return
 
         if self._geo_animation and self._geo_animation.state() == QPropertyAnimation.State.Running:
@@ -2263,6 +2303,8 @@ class DynamicIslandWidget(QWidget):
             cur_pt = event.globalPosition().toPoint()
             self._drag_start_global = cur_pt
             self._drag_start_pos = self.pos()
+            self._drag_start_size = self.size()
+            self._drag_grab_offset = event.position().toPoint()
             self._drag_last_pos = cur_pt
             self._is_dragging = False
 
@@ -2277,54 +2319,151 @@ class DynamicIslandWidget(QWidget):
     def mouseMoveEvent(self, event):
         # 1. Fluid Drag & Edge Snapping with Hysteresis
         if event.buttons() & Qt.MouseButton.LeftButton and self._drag_start_global is not None:
-            cur_pt = event.globalPosition().toPoint()
-            delta = cur_pt - self._drag_start_global
-            dist = delta.manhattanLength()
+            try:
+                cur_pt = event.globalPosition().toPoint()
+                delta = cur_pt - self._drag_start_global
+                dist = delta.manhattanLength()
 
-            if not self._is_dragging and dist >= 4:
-                self._is_dragging = True
-                self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
-                self._hover_expand_timer.stop()
-                self._hover_collapse_timer.stop()
+                if not self._is_dragging and dist >= 4:
+                    self._is_dragging = True
+                    self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
+                    self._hover_expand_timer.stop()
+                    self._hover_collapse_timer.stop()
+                    if self._island_state != "compact":
+                        self._island_state = "compact"
+                        self._expand_progress_val = 0.0
+                        self._update_child_visibility("compact")
 
-            if self._is_dragging:
-                last_pt = getattr(self, "_drag_last_pos", cur_pt)
-                vx = float(cur_pt.x() - last_pt.x())
-                vy = float(cur_pt.y() - last_pt.y())
-                self._liquid_vx = self._liquid_vx * 0.7 + vx * 0.3
-                self._liquid_vy = self._liquid_vy * 0.7 + vy * 0.3
-                self._drag_last_pos = cur_pt
+                if self._is_dragging:
+                    last_pt = getattr(self, "_drag_last_pos", cur_pt)
+                    vx = float(cur_pt.x() - last_pt.x())
+                    vy = float(cur_pt.y() - last_pt.y())
+                    self._liquid_vx = self._liquid_vx * 0.7 + vx * 0.3
+                    self._liquid_vy = self._liquid_vy * 0.7 + vy * 0.3
+                    self._drag_last_pos = cur_pt
 
-                screen = QGuiApplication.screenAt(cur_pt) or QGuiApplication.primaryScreen()
-                s_geo = screen.geometry() if screen else QRectF(0, 0, 1920, 1080).toRect()
+                    screen = QGuiApplication.screenAt(cur_pt) or QGuiApplication.primaryScreen()
+                    s_geo = screen.geometry() if screen else QRectF(0, 0, 1920, 1080).toRect()
 
-                # Pure delta-based tracking: 100% free movement across the entire screen
-                raw_x = self._drag_start_pos.x() + delta.x()
-                raw_y = self._drag_start_pos.y() + delta.y()
+                    c_x = cur_pt.x()
+                    c_y = cur_pt.y()
+                    d_top = max(0, c_y - s_geo.top())
+                    d_bot = max(0, s_geo.bottom() - c_y)
+                    d_left = max(0, c_x - s_geo.left())
+                    d_right = max(0, s_geo.right() - c_x)
 
-                w = self.width()
-                h = self.height()
+                    prev_edge = getattr(self, "_dock_edge", "top")
 
-                # Keep cleanly bounded within screen viewing area
-                raw_x = max(s_geo.left() - w + 50, min(s_geo.right() - 50, raw_x))
-                raw_y = max(s_geo.top(), min(s_geo.bottom() - 30, raw_y))
+                    # Hysteresis thresholds for live edge & corner snapping
+                    # Corners: snap into corner at <= 120px, hold corner until > 150px
+                    c_snap = 120
+                    c_hold = 150
+                    in_tl = (d_top <= c_hold and d_left <= c_hold) if prev_edge in ("top-left", "corner-tl") else (d_top <= c_snap and d_left <= c_snap)
+                    in_tr = (d_top <= c_hold and d_right <= c_hold) if prev_edge in ("top-right", "corner-tr") else (d_top <= c_snap and d_right <= c_snap)
+                    in_bl = (d_bot <= c_hold and d_left <= c_hold) if prev_edge in ("bottom-left", "corner-bl") else (d_bot <= c_snap and d_left <= c_snap)
+                    in_br = (d_bot <= c_hold and d_right <= c_hold) if prev_edge in ("bottom-right", "corner-br") else (d_bot <= c_snap and d_right <= c_snap)
 
-                # Smoothly morph towards capsule while dragging in open space
-                d_top = abs(raw_y - s_geo.top())
-                d_bot = abs(s_geo.bottom() - (raw_y + h))
-                d_left = abs(raw_x - s_geo.left())
-                d_right = abs(s_geo.right() - (raw_x + w))
-                min_d = min(d_top, d_bot, d_left, d_right)
+                    if in_tl:
+                        target_edge = "top-left"
+                    elif in_tr:
+                        target_edge = "top-right"
+                    elif in_bl:
+                        target_edge = "bottom-left"
+                    elif in_br:
+                        target_edge = "bottom-right"
+                    else:
+                        # Screen edges: snap at <= 75px, hold until > 100px
+                        e_snap = 75
+                        e_hold = 100
 
-                if min_d > 45:
-                    self._target_morph = 0.0
-                else:
-                    self._target_morph = 1.0
+                        min_d = min(d_top, d_bot, d_left, d_right)
+                        if min_d == d_top:
+                            candidate = "top"
+                        elif min_d == d_bot:
+                            candidate = "bottom"
+                        elif min_d == d_left:
+                            candidate = "left"
+                        else:
+                            candidate = "right"
 
-                self.move(int(raw_x), int(raw_y))
-                self._floating_center = self.geometry().center()
-                self.update()
-                return
+                        thresh = e_hold if prev_edge == candidate else e_snap
+                        if min_d <= thresh:
+                            target_edge = candidate
+                        else:
+                            target_edge = "floating"
+
+                    has_media = self._is_music_active() or self._media_info.get("has_media", False)
+
+                    if target_edge in ("top-left", "top-right", "bottom-left", "bottom-right"):
+                        target_w = CORNER_COMPACT_MUSIC_W if has_media else CORNER_COMPACT_IDLE_W
+                        target_h = CORNER_COMPACT_MUSIC_H if has_media else CORNER_COMPACT_IDLE_H
+                    elif target_edge in ("left", "right"):
+                        target_w = SIDE_COMPACT_MUSIC_W if has_media else SIDE_COMPACT_IDLE_W
+                        target_h = SIDE_COMPACT_MUSIC_H if has_media else SIDE_COMPACT_IDLE_H
+                    else:
+                        target_w = COMPACT_MUSIC_WIDTH if has_media else COMPACT_IDLE_WIDTH
+                        target_h = COMPACT_HEIGHT
+
+                    start_w = max(1.0, float(getattr(self, "_drag_start_size", self.size()).width()))
+                    start_h = max(1.0, float(getattr(self, "_drag_start_size", self.size()).height()))
+                    grab_pt = getattr(self, "_drag_grab_offset", QPoint(int(start_w / 2), int(start_h / 2)))
+                    ratio_grab_x = max(0.0, min(1.0, grab_pt.x() / start_w))
+                    ratio_grab_y = max(0.0, min(1.0, grab_pt.y() / start_h))
+
+                    if target_edge == "top-left":
+                        target_x = s_geo.left()
+                        target_y = s_geo.top()
+                    elif target_edge == "top-right":
+                        target_x = s_geo.right() - target_w + 1
+                        target_y = s_geo.top()
+                    elif target_edge == "bottom-left":
+                        target_x = s_geo.left()
+                        target_y = s_geo.bottom() - target_h + 1
+                    elif target_edge == "bottom-right":
+                        target_x = s_geo.right() - target_w + 1
+                        target_y = s_geo.bottom() - target_h + 1
+                    elif target_edge == "top":
+                        target_y = s_geo.top()
+                        target_x = int(c_x - target_w * ratio_grab_x)
+                        target_x = max(s_geo.left(), min(s_geo.right() - target_w + 1, target_x))
+                        self._dock_ratio_x = max(0.08, min(0.92, (target_x + target_w / 2.0 - s_geo.left()) / max(1.0, float(s_geo.width()))))
+                    elif target_edge == "bottom":
+                        target_y = s_geo.bottom() - target_h + 1
+                        target_x = int(c_x - target_w * ratio_grab_x)
+                        target_x = max(s_geo.left(), min(s_geo.right() - target_w + 1, target_x))
+                        self._dock_ratio_x = max(0.08, min(0.92, (target_x + target_w / 2.0 - s_geo.left()) / max(1.0, float(s_geo.width()))))
+                    elif target_edge == "left":
+                        target_x = s_geo.left()
+                        target_y = int(c_y - target_h * ratio_grab_y)
+                        target_y = max(s_geo.top(), min(s_geo.bottom() - target_h + 1, target_y))
+                        self._dock_ratio_y = max(0.08, min(0.92, (target_y + target_h / 2.0 - s_geo.top()) / max(1.0, float(s_geo.height()))))
+                    elif target_edge == "right":
+                        target_x = s_geo.right() - target_w + 1
+                        target_y = int(c_y - target_h * ratio_grab_y)
+                        target_y = max(s_geo.top(), min(s_geo.bottom() - target_h + 1, target_y))
+                        self._dock_ratio_y = max(0.08, min(0.92, (target_y + target_h / 2.0 - s_geo.top()) / max(1.0, float(s_geo.height()))))
+                    else:  # floating
+                        target_x = int(c_x - target_w * ratio_grab_x)
+                        target_y = int(c_y - target_h * ratio_grab_y)
+                        target_x = max(s_geo.left() + 10, min(s_geo.right() - target_w - 10, target_x))
+                        target_y = max(s_geo.top() + 10, min(s_geo.bottom() - target_h - 10, target_y))
+                        self._floating_center = QPointF(float(target_x + target_w / 2.0), float(target_y + target_h / 2.0))
+
+                    self._dock_edge = target_edge
+                    self._target_morph = 0.0 if target_edge == "floating" else 1.0
+                    self.setGeometry(int(target_x), int(target_y), int(target_w), int(target_h))
+                    if target_edge in ("bottom", "bottom-left", "bottom-right"):
+                        self._ensure_behind_taskbar()
+                    self.update()
+                    return
+            except Exception as e:
+                import traceback
+                log_file = os.path.join(os.path.expanduser("~"), "DynamicIsland_crash.log")
+                try:
+                    with open(log_file, "a", encoding="utf-8") as f:
+                        f.write(f"\n--- DRAG GLITCH {time.ctime()} ---\n{traceback.format_exc()}\n")
+                except Exception:
+                    pass
 
         # 2. Interactive Hovers
         pos = event.position()
@@ -2389,79 +2528,38 @@ class DynamicIslandWidget(QWidget):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            if self._is_dragging:
-                self._is_dragging = False
-                self._drag_start_global = None
-                self._hovered = self.rect().contains(self.mapFromGlobal(QCursor.pos()))
+        try:
+            if event.button() == Qt.MouseButton.LeftButton:
+                if self._is_dragging:
+                    self._is_dragging = False
+                    self._drag_start_global = None
+                    self._hovered = self.rect().contains(self.mapFromGlobal(QCursor.pos()))
 
-                center = self.geometry().center()
-                screen = QGuiApplication.screenAt(center) or QGuiApplication.primaryScreen()
-                s_geo = screen.geometry() if screen else QRectF(0, 0, 1920, 1080).toRect()
-                w = self.width()
-                h = self.height()
-                cur_x = self.x()
-                cur_y = self.y()
-
-                d_top = abs(cur_y - s_geo.top())
-                d_bot = abs(s_geo.bottom() - (cur_y + h))
-                d_left = abs(cur_x - s_geo.left())
-                d_right = abs(s_geo.right() - (cur_x + w))
-                min_d = min(d_top, d_bot, d_left, d_right)
-
-                SNAP_DIST = 60
-                CORNER_ZONE = 90
-
-                # 1. Snap to screen corners
-                if d_top <= SNAP_DIST and d_left <= CORNER_ZONE:
-                    self._dock_edge = "top-left"
-                    self._target_morph = 1.0
-                elif d_top <= SNAP_DIST and d_right <= CORNER_ZONE:
-                    self._dock_edge = "top-right"
-                    self._target_morph = 1.0
-                elif d_bot <= SNAP_DIST and d_left <= CORNER_ZONE:
-                    self._dock_edge = "bottom-left"
-                    self._target_morph = 1.0
-                elif d_bot <= SNAP_DIST and d_right <= CORNER_ZONE:
-                    self._dock_edge = "bottom-right"
-                    self._target_morph = 1.0
-                # 2. Snap to screen edges
-                elif min_d <= SNAP_DIST:
-                    if min_d == d_top:
-                        self._dock_edge = "top"
-                        self._dock_ratio_x = max(0.08, min(0.92, (cur_x + w / 2.0 - s_geo.left()) / s_geo.width()))
-                    elif min_d == d_bot:
-                        self._dock_edge = "bottom"
-                        self._dock_ratio_x = max(0.08, min(0.92, (cur_x + w / 2.0 - s_geo.left()) / s_geo.width()))
-                    elif min_d == d_left:
-                        self._dock_edge = "left"
-                        self._dock_ratio_y = max(0.08, min(0.92, (cur_y + h / 2.0 - s_geo.top()) / s_geo.height()))
+                    # Settle cleanly into docked position with smooth spring easing
+                    self._apply_geometry_for_state(self._island_state, animate=True)
+                    self._ensure_behind_taskbar()
+                    self.save_current_settings()
+                    if self._island_state == "compact":
+                        self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
                     else:
-                        self._dock_edge = "right"
-                        self._dock_ratio_y = max(0.08, min(0.92, (cur_y + h / 2.0 - s_geo.top()) / s_geo.height()))
-                    self._target_morph = 1.0
-                else:
-                    # 3. Free floating
-                    self._dock_edge = "floating"
-                    self._floating_center = center
-                    self._target_morph = 0.0
+                        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+                    self.update()
+                    return
 
-                # Settle cleanly into docked position with smooth spring easing
-                self._apply_geometry_for_state(self._island_state, animate=True)
-                self.save_current_settings()
-                if self._island_state == "compact":
-                    self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
-                else:
-                    self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
-                self.update()
-                return
-
-            self._drag_start_global = None
-            if self._island_state == "device_popup":
-                return
-            elif self._island_state in ("compact", "toast"):
-                self.set_island_state("expanded")
-        super().mouseReleaseEvent(event)
+                self._drag_start_global = None
+                if self._island_state == "device_popup":
+                    return
+                elif self._island_state in ("compact", "toast"):
+                    self.set_island_state("expanded")
+            super().mouseReleaseEvent(event)
+        except Exception as e:
+            import traceback
+            log_file = os.path.join(os.path.expanduser("~"), "DynamicIsland_crash.log")
+            try:
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n--- RELEASE GLITCH {time.ctime()} ---\n{traceback.format_exc()}\n")
+            except Exception:
+                pass
 
     # -------------------------------------------------------------
     # Drag and Drop File Shelf Handlers (Spec 3.4)
@@ -3089,11 +3187,13 @@ class DynamicIslandWidget(QWidget):
             painter.setFont(get_subtext_font(8.5))
             painter.setPen(COLOR_TEXT_PRIMARY)
             date_str = getattr(self, "_date_str", "Dynamic Island")
-            painter.drawText(QRectF(h_start_x, top_y_base + 4.0, h_arm_w, 13.0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, date_str)
+            fm_d = QFontMetrics(painter.font())
+            painter.drawText(QRectF(h_start_x, top_y_base + 4.0, h_arm_w, 13.0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, fm_d.elidedText(date_str, Qt.TextElideMode.ElideRight, int(h_arm_w)))
 
             painter.setFont(get_microlabel_font())
             painter.setPen(QColor(255, 255, 255, 150))
-            painter.drawText(QRectF(h_start_x, top_y_base + 18.0, h_arm_w, 12.0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "Ready · Standing By")
+            fm_s = QFontMetrics(painter.font())
+            painter.drawText(QRectF(h_start_x, top_y_base + 18.0, h_arm_w, 12.0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, fm_s.elidedText("Ready · Standing By", Qt.TextElideMode.ElideRight, int(h_arm_w)))
             painter.restore()
 
         # ── 3. Vertical Arm: Audio Spectrum Visualizer + Clock/Battery ─
