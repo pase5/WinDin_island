@@ -19,6 +19,7 @@ a = Analysis(
         'ui.styles',
         'ui.island_widget',
         'ui.device_popup',
+        'ui.settings_window',
         'ui.components',
         'ui.components.visualizer',
         'numpy',

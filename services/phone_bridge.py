@@ -358,6 +358,45 @@ class PhoneBridgeHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(res)
 
+        elif path in ("/api/open_settings", "/api/settings_window"):
+            if self.server_ref:
+                self.server_ref.open_settings_requested.emit()
+            res = json.dumps({"status": "ok", "action": "open_settings"}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
+        elif path.startswith("/api/dock"):
+            from urllib.parse import urlparse, parse_qs
+            query = parse_qs(urlparse(self.path).query)
+            edge = query.get("edge", ["top"])[0]
+            if self.server_ref:
+                self.server_ref.dock_requested.emit(edge)
+            res = json.dumps({"status": "ok", "dock": edge}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
+        elif path.startswith("/api/simulate"):
+            from urllib.parse import urlparse, parse_qs
+            query = parse_qs(urlparse(self.path).query)
+            kind = query.get("kind", ["osd"])[0]
+            if self.server_ref:
+                self.server_ref.simulate_requested.emit(kind)
+            res = json.dumps({"status": "ok", "simulated": kind}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -423,6 +462,45 @@ class PhoneBridgeHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(res)
 
+        elif path in ("/api/open_settings", "/api/settings_window"):
+            if self.server_ref:
+                self.server_ref.open_settings_requested.emit()
+            res = json.dumps({"status": "ok", "action": "open_settings"}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
+        elif path.startswith("/api/dock"):
+            from urllib.parse import urlparse, parse_qs
+            query = parse_qs(urlparse(self.path).query)
+            edge = query.get("edge", ["top"])[0]
+            if self.server_ref:
+                self.server_ref.dock_requested.emit(edge)
+            res = json.dumps({"status": "ok", "dock": edge}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
+        elif path.startswith("/api/simulate"):
+            from urllib.parse import urlparse, parse_qs
+            query = parse_qs(urlparse(self.path).query)
+            kind = query.get("kind", ["osd"])[0]
+            if self.server_ref:
+                self.server_ref.simulate_requested.emit(kind)
+            res = json.dumps({"status": "ok", "simulated": kind}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -436,6 +514,9 @@ class PhoneBridgeService(QObject):
     notification_received = pyqtSignal(dict)  # {"app": ..., "title": ..., "message": ..., "is_phone": True}
     device_paired = pyqtSignal(dict)          # {"ua": ..., "ip": ...}
     wake_requested = pyqtSignal()
+    open_settings_requested = pyqtSignal()
+    dock_requested = pyqtSignal(str)
+    simulate_requested = pyqtSignal(str)
 
     def __init__(self, port: int = 54321, parent=None):
         super().__init__(parent)

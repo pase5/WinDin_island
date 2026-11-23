@@ -102,6 +102,28 @@ The standalone binary will be generated at `dist/DynamicIsland.exe` (~54 MB).
 
 ---
 
+## Settings & Control Center Application
+
+WindowLand now includes a dedicated modern desktop settings application for all adjustments:
+- **General & Island Controls:** Expand/collapse, recenter to top bezel, auto-hide when idle toggle, autostart on Windows boot, 12h/24h clock format.
+- **Appearance & Themes:** Live preview of Dynamic Island with dynamic ambient glow, OLED Obsidian, Frosted Titanium, custom color picker, gradient themes, and ambient intensity slider (0%–50%).
+- **Interactive Docking Selector:** Visual monitor graphic to click and dock to Top Bezel, Bottom Taskbar, Left/Right edges, 4 Corners, or Free Floating, plus multi-monitor selector.
+- **Tools & Companion:** Phone Companion connection dashboard with pairing URL, copy link, and quick desktop actions (Screenshot, Mute, Do Not Disturb).
+- **Diagnostics Simulation Deck:** One-click live simulator for Volume HUD, Incoming Call, 2FA OTP Code, File Shelf, Download Hairline, Notifications, 3D AirPods, and Over-Ear Headphones connection sheets.
+
+### Launching the Settings Application
+- **Tray Menu:** Right-click the system tray icon and select **`⚙️ Settings & Control Center...`**
+- **Tray Icon Double Click:** Double-click the tray icon to open Settings immediately.
+- **Island Right Click:** Right-click directly on the Dynamic Island on your desktop.
+- **Standalone Command:**
+  ```bash
+  python settings_app.py
+  # or
+  python main.py --settings
+  ```
+
+---
+
 ## Architecture & Implementation Details
 
 For the complete technical breakdown, completed milestone checklist, and upcoming feature roadmap, see:

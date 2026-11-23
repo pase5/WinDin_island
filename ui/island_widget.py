@@ -562,6 +562,7 @@ class DynamicIslandWidget(QWidget):
     hover-to-expand, and auto-hide when there is no music.
     """
     state_changed = pyqtSignal(str)
+    show_settings_requested = pyqtSignal()
 
     def __init__(self, media_service: MediaService, system_service: SystemService, device_service: Optional[Any] = None):
         super().__init__()
@@ -1228,6 +1229,16 @@ class DynamicIslandWidget(QWidget):
         self._ambient_enabled = (self._ambient_opacity > 0.0)
         self.update()
         self.save_current_settings()
+
+    def set_dock_edge(self, edge: str, animate: bool = True):
+        """Sets the dock edge (top, bottom, left, right, top-left, etc.) and animates into position."""
+        self._dock_edge = edge
+        self._target_morph = 1.0 if edge != "floating" else 0.0
+        self._dock_ratio_x = 0.5
+        self._dock_ratio_y = 0.5
+        self._apply_geometry_for_state(self._island_state, animate=animate)
+        self.save_current_settings()
+        self.update()
 
     def apply_saved_settings(self, cfg: dict):
         """Restores dock position, edge, screen monitor, and theme cleanly from saved settings."""
@@ -2164,6 +2175,13 @@ class DynamicIslandWidget(QWidget):
     # Mouse Interaction: Liquid Drag-and-Drop & Morphing
     # -------------------------------------------------------------
     def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.RightButton:
+            if hasattr(self, "_on_right_click_callback") and self._on_right_click_callback:
+                self._on_right_click_callback(event.globalPosition().toPoint())
+                return
+            self.show_settings_requested.emit()
+            return
+
         if event.button() == Qt.MouseButton.LeftButton:
             pos = event.position()
 
