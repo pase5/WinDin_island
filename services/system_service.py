@@ -354,10 +354,17 @@ class SystemService(QObject):
         return self._dnd_enabled
 
     def trigger_test_notification(self, app="System Alert", title="Quick Alert", message="Compact notch expanded on alert!"):
+        app_icon = None
+        try:
+            from services.icon_service import get_app_icon
+            app_icon = get_app_icon(app)
+        except Exception:
+            pass
         notif = {
             "app": app,
             "title": title,
             "message": message,
+            "app_icon": app_icon,
             "time": time.time()
         }
         self.notification_received.emit(notif)
@@ -420,10 +427,19 @@ class SystemService(QObject):
                                 elif len(texts) == 1:
                                     msg = texts[0]
 
+                            app_icon = None
+                            try:
+                                from services.icon_service import get_app_icon
+                                app_icon = get_app_icon(app_name)
+                            except Exception:
+                                pass
+
                             self.notification_received.emit({
                                 "app": app_name,
                                 "title": title,
-                                "message": msg or "Incoming alert"
+                                "message": msg or "Incoming alert",
+                                "app_icon": app_icon,
+                                "time": time.time()
                             })
                 except Exception:
                     pass

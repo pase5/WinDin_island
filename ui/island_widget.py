@@ -1388,17 +1388,25 @@ class DynamicIslandWidget(QWidget):
         if self._island_state != "compact":
             self.set_island_state("compact")
 
-    def trigger_toast(self, app: str, title: str, message: str):
+    def trigger_toast(self, app: str, title: str, message: str, app_icon: Optional[Any] = None):
         """
         Pops up the notch immediately on incoming notification toast,
         unless currently suppressed by a full-screen game or video!
         """
         if self._is_fullscreen_suppressed:
             return
+        if app_icon is None or (hasattr(app_icon, "isNull") and app_icon.isNull()):
+            try:
+                from services.icon_service import get_app_icon
+                app_icon = get_app_icon(app, target_size=48)
+            except Exception:
+                app_icon = None
+
         self._toast_info = {
             "app": app,
             "title": title,
             "message": message,
+            "app_icon": app_icon,
             "time": time.time()
         }
         self.set_glow_state("notification")
@@ -1418,9 +1426,38 @@ class DynamicIslandWidget(QWidget):
 
         self._glow_state = glow_name
         cfg = GLOW_STATES[glow_name]
-        self._target_glow_c1 = QColor(cfg["color1"])
-        self._target_glow_c2 = QColor(cfg["color2"])
-        self._target_glow_opacity = cfg["opacity"]
+
+        # Follow the theme of the dynamic island at the instance
+        bg_style = getattr(self, "_bg_style", "ambient")
+        if bg_style == "solid" and hasattr(self, "_solid_color"):
+            sc = self._solid_color
+            if glow_name == "notification":
+                self._target_glow_c1 = sc.lighter(140)
+                self._target_glow_c2 = sc.lighter(115)
+                self._target_glow_opacity = 0.55
+            elif glow_name == "idle":
+                self._target_glow_c1 = sc.lighter(120)
+                self._target_glow_c2 = sc
+                self._target_glow_opacity = 0.20
+            else:
+                self._target_glow_c1 = QColor(cfg["color1"])
+                self._target_glow_c2 = QColor(cfg["color2"])
+                self._target_glow_opacity = cfg["opacity"]
+        elif bg_style == "gradient" and hasattr(self, "_gradient_c1"):
+            g1 = self._gradient_c1
+            g2 = getattr(self, "_gradient_c2", g1)
+            if glow_name == "notification":
+                self._target_glow_c1 = g1.lighter(130)
+                self._target_glow_c2 = g2.lighter(115)
+                self._target_glow_opacity = 0.55
+            else:
+                self._target_glow_c1 = QColor(cfg["color1"])
+                self._target_glow_c2 = QColor(cfg["color2"])
+                self._target_glow_opacity = cfg["opacity"]
+        else:
+            self._target_glow_c1 = QColor(cfg["color1"])
+            self._target_glow_c2 = QColor(cfg["color2"])
+            self._target_glow_opacity = cfg["opacity"]
 
         if duration_sec and duration_sec > 0:
             self._flash_timer.start(int(duration_sec * 1000))
@@ -2071,12 +2108,11 @@ class DynamicIslandWidget(QWidget):
 
     def _on_notification_received(self, notif: dict):
         if not self.system_service.is_dnd:
-            if self._island_state == "device_popup":
-                return
             self.trigger_toast(
                 app=notif.get("app", "Alert"),
                 title=notif.get("title", "Incoming Alert"),
-                message=notif.get("message", "")
+                message=notif.get("message", ""),
+                app_icon=notif.get("app_icon", None)
             )
 
     def _on_status_alert(self, category: str, message: str):
@@ -2089,19 +2125,17 @@ class DynamicIslandWidget(QWidget):
 
     def _on_device_connected(self, data: dict):
         """Triggered when an external audio device connects."""
-        self.trigger_device_popup(data)
+        dev_name = data.get("display_title") or data.get("name") or "Audio Device"
+        try:
+            from services.icon_service import get_app_icon
+            app_icon = get_app_icon("Audio", target_size=48)
+        except Exception:
+            app_icon = None
+        self.trigger_toast("Audio", "Device Connected", f"{dev_name} has device connected", app_icon=app_icon)
 
     def trigger_device_popup(self, data: dict):
-        """Pops up and expands the Dynamic Island into the Apple device accessory card."""
-        if self._is_fullscreen_suppressed:
-            return
-        self._device_info = data
-        self.set_glow_state("notification", duration_sec=4.5)
-        if not self.isVisible():
-            self.show()
-            self.raise_()
-        self.set_island_state("device_popup")
-        self._device_dismiss_timer.start(4500)
+        """Replaced device popup: completely removed 3D accessory card and displays clean toast writing."""
+        self._on_device_connected(data)
 
     # -------------------------------------------------------------
     # 60 FPS Render Tick
@@ -3874,16 +3908,67 @@ class DynamicIslandWidget(QWidget):
         elif any(k in app_lower for k in ("calendar", "meeting", "clock")):
             icon_type = "calendar"
             accent_col = QColor("#FFA726")
+        elif any(k in app_lower for k in ("audio", "headphone", "earphone", "airpods", "sony")):
+            icon_type = "music"
+            accent_col = QColor("#6366F1")
         else:
             icon_type = "bell"
             accent_col = QColor("#00D2FF")
+
+        # Active Island Theme Adaptation
+        bg_style = getattr(self, "_bg_style", "ambient")
+        solid_col = getattr(self, "_solid_color", QColor("#08080C"))
+        if bg_style == "solid":
+            badge_base_top = solid_col.lighter(130)
+            badge_base_bot = solid_col.darker(110)
+            tile_border = solid_col.lighter(165)
+            tile_border.setAlpha(120)
+        elif bg_style == "gradient" and hasattr(self, "_gradient_c1"):
+            g1 = getattr(self, "_gradient_c1", QColor(14, 14, 18))
+            g2 = getattr(self, "_gradient_c2", QColor(2, 2, 4))
+            badge_base_top = g1.lighter(120)
+            badge_base_bot = g2.darker(105)
+            tile_border = g1.lighter(150)
+            tile_border.setAlpha(120)
+        else:
+            badge_base_top = QColor(14, 24, 40, 235)
+            badge_base_bot = QColor(8, 16, 28, 250)
+            tile_border = QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 100)
 
         # 1. Top row: Icon Badge + App Name + Close Cross
         badge_size = 32.0
         badge_x = 18.0
         badge_y = 18.0
-        tile_grad_bot = QColor(10, 18, 30, 250)
-        self._paint_toast_icon(painter, icon_type, badge_x + badge_size / 2.0, badge_y + badge_size / 2.0, accent_col, tile_grad_bot)
+        badge_rect = QRectF(badge_x, badge_y, badge_size, badge_size)
+
+        tile_grad = QLinearGradient(badge_x, badge_y, badge_x, badge_y + badge_size)
+        tile_grad.setColorAt(0.0, badge_base_top)
+        tile_grad.setColorAt(1.0, badge_base_bot)
+        painter.setPen(QPen(tile_border, 1.0))
+        painter.setBrush(QBrush(tile_grad))
+        painter.drawRoundedRect(badge_rect, 9.0, 9.0)
+
+        # Extract authentic App Logo / Icon
+        app_icon = self._toast_info.get("app_icon")
+        if app_icon is None or (hasattr(app_icon, "isNull") and app_icon.isNull()):
+            try:
+                from services.icon_service import get_app_icon
+                app_icon = get_app_icon(raw_app, target_size=int(badge_size))
+                self._toast_info["app_icon"] = app_icon
+            except Exception:
+                app_icon = None
+
+        if app_icon and hasattr(app_icon, "isNull") and not app_icon.isNull():
+            pad = 3.5
+            icon_target = QRectF(badge_x + pad, badge_y + pad, badge_size - pad * 2.0, badge_size - pad * 2.0)
+            painter.save()
+            icon_clip = QPainterPath()
+            icon_clip.addRoundedRect(icon_target, 7.0, 7.0)
+            painter.setClipPath(icon_clip, Qt.ClipOperation.IntersectClip)
+            painter.drawPixmap(icon_target.toRect(), app_icon)
+            painter.restore()
+        else:
+            self._paint_toast_icon(painter, icon_type, badge_x + badge_size / 2.0, badge_y + badge_size / 2.0, accent_col, badge_base_bot)
 
         # App name
         painter.setFont(get_subtext_font(10.0))
@@ -3941,16 +4026,67 @@ class DynamicIslandWidget(QWidget):
         elif any(k in app_lower for k in ("calendar", "meeting", "clock")):
             icon_type = "calendar"
             accent_col = QColor("#FFA726")
+        elif any(k in app_lower for k in ("audio", "headphone", "earphone", "airpods", "sony")):
+            icon_type = "music"
+            accent_col = QColor("#6366F1")
         else:
             icon_type = "bell"
             accent_col = QColor("#00D2FF")
+
+        # Active Island Theme Adaptation
+        bg_style = getattr(self, "_bg_style", "ambient")
+        solid_col = getattr(self, "_solid_color", QColor("#08080C"))
+        if bg_style == "solid":
+            badge_base_top = solid_col.lighter(130)
+            badge_base_bot = solid_col.darker(110)
+            tile_border = solid_col.lighter(165)
+            tile_border.setAlpha(120)
+        elif bg_style == "gradient" and hasattr(self, "_gradient_c1"):
+            g1 = getattr(self, "_gradient_c1", QColor(14, 14, 18))
+            g2 = getattr(self, "_gradient_c2", QColor(2, 2, 4))
+            badge_base_top = g1.lighter(120)
+            badge_base_bot = g2.darker(105)
+            tile_border = g1.lighter(150)
+            tile_border.setAlpha(120)
+        else:
+            badge_base_top = QColor(14, 24, 40, 235)
+            badge_base_bot = QColor(8, 16, 28, 250)
+            tile_border = QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 100)
 
         # 1. Top: Centered Icon Badge + Dismiss Cross
         badge_size = 36.0
         badge_x = (w - badge_size) / 2.0
         badge_y = 20.0
-        tile_grad_bot = QColor(10, 18, 30, 250)
-        self._paint_toast_icon(painter, icon_type, badge_x + badge_size / 2.0, badge_y + badge_size / 2.0, accent_col, tile_grad_bot)
+        badge_rect = QRectF(badge_x, badge_y, badge_size, badge_size)
+
+        tile_grad = QLinearGradient(badge_x, badge_y, badge_x, badge_y + badge_size)
+        tile_grad.setColorAt(0.0, badge_base_top)
+        tile_grad.setColorAt(1.0, badge_base_bot)
+        painter.setPen(QPen(tile_border, 1.0))
+        painter.setBrush(QBrush(tile_grad))
+        painter.drawRoundedRect(badge_rect, 10.0, 10.0)
+
+        # Extract authentic App Logo / Icon
+        app_icon = self._toast_info.get("app_icon")
+        if app_icon is None or (hasattr(app_icon, "isNull") and app_icon.isNull()):
+            try:
+                from services.icon_service import get_app_icon
+                app_icon = get_app_icon(raw_app, target_size=int(badge_size))
+                self._toast_info["app_icon"] = app_icon
+            except Exception:
+                app_icon = None
+
+        if app_icon and hasattr(app_icon, "isNull") and not app_icon.isNull():
+            pad = 4.0
+            icon_target = QRectF(badge_x + pad, badge_y + pad, badge_size - pad * 2.0, badge_size - pad * 2.0)
+            painter.save()
+            icon_clip = QPainterPath()
+            icon_clip.addRoundedRect(icon_target, 8.0, 8.0)
+            painter.setClipPath(icon_clip, Qt.ClipOperation.IntersectClip)
+            painter.drawPixmap(icon_target.toRect(), app_icon)
+            painter.restore()
+        else:
+            self._paint_toast_icon(painter, icon_type, badge_x + badge_size / 2.0, badge_y + badge_size / 2.0, accent_col, badge_base_bot)
 
         # Close button (away from bezel)
         edge = getattr(self, "_dock_edge", "left")
@@ -4017,7 +4153,7 @@ class DynamicIslandWidget(QWidget):
         title = self._toast_info.get("title") or "Incoming Alert"
         message = (self._toast_info.get("message") or "").strip()
 
-        # Dynamic category iconography & palette
+        # Dynamic category iconography & palette fallback
         app_lower = raw_app.lower()
         if any(k in app_lower for k in ("snip", "screen", "capture", "screenshot", "camera", "photo")):
             icon_type = "camera"
@@ -4043,12 +4179,18 @@ class DynamicIslandWidget(QWidget):
             tile_grad_top = QColor(50, 32, 14, 235)
             tile_grad_bot = QColor(30, 18, 8, 250)
             tile_border = QColor(255, 167, 38, 75)
-        elif any(k in app_lower for k in ("music", "spotify", "apple music", "ytmusic", "audio", "sound")):
+        elif any(k in app_lower for k in ("music", "spotify", "apple music", "ytmusic")):
             icon_type = "music"
             accent_col = QColor("#1DB954")     # Spotify Green
             tile_grad_top = QColor(12, 42, 26, 235)
             tile_grad_bot = QColor(6, 26, 16, 250)
             tile_border = QColor(29, 185, 84, 75)
+        elif any(k in app_lower for k in ("audio", "headphone", "earphone", "airpods", "sony")):
+            icon_type = "music"
+            accent_col = QColor("#6366F1")     # Royal Indigo
+            tile_grad_top = QColor(26, 22, 54, 235)
+            tile_grad_bot = QColor(14, 12, 34, 250)
+            tile_border = QColor(99, 102, 241, 95)
         else:
             icon_type = "bell"
             accent_col = QColor("#00D2FF")     # Ice Cyan
@@ -4056,14 +4198,37 @@ class DynamicIslandWidget(QWidget):
             tile_grad_bot = QColor(10, 18, 30, 250)
             tile_border = QColor(0, 210, 255, 75)
 
+        # Active Island Theme Adaptation: Follow the theme of the dynamic island at the instance!
+        bg_style = getattr(self, "_bg_style", "ambient")
+        solid_col = getattr(self, "_solid_color", QColor("#08080C"))
+        if bg_style == "solid":
+            aurora_base = solid_col.lighter(135)
+            badge_base_top = solid_col.lighter(125)
+            badge_base_bot = solid_col.darker(110)
+            badge_border_col = solid_col.lighter(165)
+            badge_border_col.setAlpha(120)
+        elif bg_style == "gradient" and hasattr(self, "_gradient_c1"):
+            g1 = getattr(self, "_gradient_c1", QColor(14, 14, 18))
+            g2 = getattr(self, "_gradient_c2", QColor(2, 2, 4))
+            aurora_base = g1.lighter(125)
+            badge_base_top = g1.lighter(120)
+            badge_base_bot = g2.darker(105)
+            badge_border_col = g1.lighter(150)
+            badge_border_col.setAlpha(120)
+        else:  # ambient
+            aurora_base = accent_col
+            badge_base_top = tile_grad_top
+            badge_base_bot = tile_grad_bot
+            badge_border_col = tile_border
+
         # ── 1. Liquid Aurora Plasma Underglow & Top Meniscus ────────
         badge_size = 46.0
         badge_x = r_top + 14.0
         badge_y = (h - badge_size) / 2.0
 
         aurora = QRadialGradient(QPointF(badge_x + badge_size * 0.7, h * 0.5), w * 0.45)
-        aurora.setColorAt(0.0, QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 26))
-        aurora.setColorAt(0.55, QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 6))
+        aurora.setColorAt(0.0, QColor(aurora_base.red(), aurora_base.green(), aurora_base.blue(), 28))
+        aurora.setColorAt(0.55, QColor(aurora_base.red(), aurora_base.green(), aurora_base.blue(), 7))
         aurora.setColorAt(1.0, QColor(0, 0, 0, 0))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(aurora))
@@ -4091,10 +4256,10 @@ class DynamicIslandWidget(QWidget):
 
         # Ambient soft aura behind badge
         badge_glow = QRadialGradient(QPointF(badge_x + badge_size * 0.5, badge_y + badge_size * 0.5), badge_size * 0.8)
-        glow_c = QColor(accent_col)
+        glow_c = QColor(aurora_base)
         glow_c.setAlpha(42)
         badge_glow.setColorAt(0.0, glow_c)
-        badge_glow.setColorAt(0.55, QColor(accent_col.red(), accent_col.green(), accent_col.blue(), 10))
+        badge_glow.setColorAt(0.55, QColor(aurora_base.red(), aurora_base.green(), aurora_base.blue(), 10))
         badge_glow.setColorAt(1.0, QColor(0, 0, 0, 0))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(badge_glow))
@@ -4102,9 +4267,9 @@ class DynamicIslandWidget(QWidget):
 
         # Rich Apple App Tile Gradient
         tile_grad = QLinearGradient(badge_x, badge_y, badge_x, badge_y + badge_size)
-        tile_grad.setColorAt(0.0, tile_grad_top)
-        tile_grad.setColorAt(1.0, tile_grad_bot)
-        painter.setPen(QPen(tile_border, 1.0))
+        tile_grad.setColorAt(0.0, badge_base_top)
+        tile_grad.setColorAt(1.0, badge_base_bot)
+        painter.setPen(QPen(badge_border_col, 1.0))
         painter.setBrush(QBrush(tile_grad))
         painter.drawRoundedRect(badge_rect, 13.0, 13.0)
 
@@ -4116,8 +4281,28 @@ class DynamicIslandWidget(QWidget):
         painter.setBrush(QBrush(tile_sheen))
         painter.drawRoundedRect(QRectF(badge_x + 1.0, badge_y + 1.0, badge_size - 2.0, 18.0), 12.0, 12.0)
 
-        # Solid Apple SF-Style Vector Icon
-        self._paint_toast_icon(painter, icon_type, badge_x + badge_size / 2.0, badge_y + badge_size / 2.0, accent_col, tile_grad_bot)
+        # Extract authentic App Logo / Icon
+        app_icon = self._toast_info.get("app_icon")
+        if app_icon is None or (hasattr(app_icon, "isNull") and app_icon.isNull()):
+            try:
+                from services.icon_service import get_app_icon
+                app_icon = get_app_icon(raw_app, target_size=int(badge_size))
+                self._toast_info["app_icon"] = app_icon
+            except Exception:
+                app_icon = None
+
+        if app_icon and hasattr(app_icon, "isNull") and not app_icon.isNull():
+            pad = 5.0
+            icon_target = QRectF(badge_x + pad, badge_y + pad, badge_size - pad * 2.0, badge_size - pad * 2.0)
+            painter.save()
+            icon_clip = QPainterPath()
+            icon_clip.addRoundedRect(icon_target, 9.0, 9.0)
+            painter.setClipPath(icon_clip, Qt.ClipOperation.IntersectClip)
+            painter.drawPixmap(icon_target.toRect(), app_icon)
+            painter.restore()
+        else:
+            # Fallback to Solid Apple SF-Style Vector Icon
+            self._paint_toast_icon(painter, icon_type, badge_x + badge_size / 2.0, badge_y + badge_size / 2.0, accent_col, badge_base_bot)
 
         # ── 3. Information Column ───────────────────────────────────
         text_x = badge_x + badge_size + 14.0

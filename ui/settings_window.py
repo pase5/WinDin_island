@@ -981,9 +981,19 @@ class SettingsWindow(QMainWindow):
         ibox.setStyleSheet("background-color: #2A2930; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);")
         ib_lay = QVBoxLayout(ibox)
         ib_lay.setContentsMargins(0, 0, 0, 0)
-        lbl_i = QLabel(icon_char)
+        lbl_i = QLabel()
         lbl_i.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_i.setStyleSheet(f"font-size: 18px; color: {icon_color};")
+        try:
+            from services.icon_service import get_app_icon
+            pix = get_app_icon(title, target_size=24)
+            if pix and not pix.isNull():
+                lbl_i.setPixmap(pix)
+            else:
+                lbl_i.setText(icon_char)
+                lbl_i.setStyleSheet(f"font-size: 18px; color: {icon_color};")
+        except Exception:
+            lbl_i.setText(icon_char)
+            lbl_i.setStyleSheet(f"font-size: 18px; color: {icon_color};")
         ib_lay.addWidget(lbl_i)
         layout.addWidget(ibox)
 
@@ -1035,8 +1045,8 @@ class SettingsWindow(QMainWindow):
             ("📸", "#DDB8FF", "Snipping Tool Toast", "Simulate screenshot notification toast", lambda: self._sim_call("snip_toast")),
             ("📅", "#4EDEA3", "Calendar Event Toast", "Simulate calendar reminder alert toast", lambda: self._sim_call("cal_toast")),
             ("🎵", "#FF43A8", "Demo Music Track", "Toggle demo audio track to test cover art & visualizer", lambda: self._sim_call("demo_music")),
-            ("🎧", "#4EDEA3", "AirPods Pro 3D Popup", "Simulate 3D AirPods accessory connection card with telemetry", lambda: self._sim_call("airpods")),
-            ("🎧", "#DDB8FF", "Sony Headphones 3D Popup", "Simulate over-ear Bluetooth headphones connection popup", lambda: self._sim_call("headphones")),
+            ("🎧", "#4EDEA3", "AirPods Pro Connected", "Simulate AirPods device connected notification alert", lambda: self._sim_call("airpods")),
+            ("🎧", "#DDB8FF", "Sony Headphones Connected", "Simulate Bluetooth headphones connected alert", lambda: self._sim_call("headphones")),
         ]
 
         for emoji, col, title, desc, action in sim_items:
