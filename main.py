@@ -14,15 +14,11 @@ import ctypes
 from ctypes import wintypes
 import traceback
 
-from PyQt6.QtWidgets import (
-    QApplication, QSystemTrayIcon, QMenu,
-    QColorDialog, QMessageBox
-)
-from PyQt6.QtCore import Qt, QRectF, QAbstractNativeEventFilter, QUrl
+from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
+from PyQt6.QtCore import Qt, QRectF, QAbstractNativeEventFilter
 from PyQt6.QtGui import (
     QIcon, QPixmap, QPainter, QColor, QPen,
-    QBrush, QAction, QActionGroup, QGuiApplication,
-    QDesktopServices
+    QBrush, QAction
 )
 
 # -------------------------------------------------------------
@@ -215,11 +211,9 @@ class AppNativeEventFilter(QAbstractNativeEventFilter):
 from services.media_service import MediaService
 from services.system_service import SystemService
 from services.device_listener import DeviceService
-from services.autostart_service import is_autostart_enabled, set_autostart
+from services.autostart_service import set_autostart
 from services.phone_bridge import PhoneBridgeService
 from ui.island_widget import DynamicIslandWidget
-from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtCore import QUrl
 
 
 def resource_path(relative_path: str) -> str:

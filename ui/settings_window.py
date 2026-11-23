@@ -41,7 +41,7 @@ class AmbientCanvasWidget(QWidget):
     behind the frosted glass cards as specified in DESIGN.md.
     """
     def __init__(self, parent: Optional[QWidget] = None):
-        super().__init__(parent)
+        super().__init__(parent)  # type: ignore[arg-type]
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
 
     def paintEvent(self, event):
@@ -88,10 +88,10 @@ class SwitchToggle(QWidget):
     Off: #35343B / rgba(255, 255, 255, 0.12)
     On: Linear gradient (#FF43A8 -> #7C03D3) with glowing shadow
     """
-    toggled = pyqtSignal(bool)
+    toggled = pyqtSignal(bool)  # type: ignore
 
     def __init__(self, checked: bool = False, parent: Optional[QWidget] = None):
-        super().__init__(parent)
+        super().__init__(parent)  # type: ignore[arg-type]
         self._checked = checked
         self.setFixedSize(48, 24)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -145,7 +145,7 @@ class GeneralNotchPreview(QWidget):
     over an inner dark well with background ambient glow.
     """
     def __init__(self, parent: Optional[QWidget] = None):
-        super().__init__(parent)
+        super().__init__(parent)  # type: ignore[arg-type]
         self.setFixedHeight(96)
         self._is_expanded = False
         self._time_str = "19:30"
@@ -227,7 +227,7 @@ class AppearanceNotchPreview(QWidget):
     hardware indicator, title text, and multi-colored equalizer bars.
     """
     def __init__(self, parent: Optional[QWidget] = None):
-        super().__init__(parent)
+        super().__init__(parent)  # type: ignore[arg-type]
         self.setFixedHeight(140)
         self._theme_mode = "ambient"
         self._ambient_opacity = 0.25
