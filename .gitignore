@@ -20,3 +20,6 @@ reminders.json
 
 # dist
 dist/
+
+# WinDin-Link paired devices
+config/paired_devices.json

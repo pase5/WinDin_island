@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0A0A0A" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>WinDin-Link</title>
+  <style>
+    :root {
+      --bg: #0A0A0A;
+      --surface: #141416;
+      --border: #242429;
+      --accent: #A3E635;
+      --accent-glow: rgba(163, 230, 53, 0.35);
+      --text: #F4F4F5;
+      --muted: #A1A1AA;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: #000; border: 1px solid var(--border);
+      padding: 10px 18px; border-radius: 999px; margin-bottom: 24px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+      transition: border-color 0.3s;
+    }
+    .pill.connected { border-color: rgba(163, 230, 53, 0.5); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #EF4444; transition: background 0.3s, box-shadow 0.3s; }
+    .dot.connected { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+    .container { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 16px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 18px;
+    }
+    h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .feed { display: flex; flex-direction: column; gap: 12px; }
+    .item {
+      background: #1B1B1F; border: 1px solid var(--border); border-radius: 14px;
+      padding: 12px; display: flex; flex-direction: column; gap: 10px;
+      animation: fadeIn 0.3s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .item img { width: 100%; max-height: 280px; object-fit: contain; border-radius: 10px; background: #000; }
+    .item-meta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; gap: 10px; }
+    .btn {
+      background: var(--accent); color: #0A0A0A; border: none; border-radius: 10px;
+      padding: 8px 14px; font-weight: 600; font-size: 13px; cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:hover { opacity: 0.92; }
+    .clip-row { display: flex; gap: 8px; }
+    input {
+      flex: 1; background: #0A0A0A; border: 1px solid var(--border); color: var(--text);
+      padding: 10px 12px; border-radius: 12px; font-size: 14px; outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: var(--accent); }
+    .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 24px 0; line-height: 1.5; }
+    .toast-msg {
+      position: fixed; bottom: 20px; background: #1B1B1F; border: 1px solid var(--accent);
+      color: var(--text); padding: 10px 18px; border-radius: 999px; font-size: 13px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.5); opacity: 0; pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s; transform: translateY(10px);
+    }
+    .toast-msg.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="pill" id="statusPill">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText" style="font-size: 14px; font-weight: 500;">Connecting to WinDin...</span>
+  </div>
+
+  <div class="container">
+    <a href="/WinDin.apk" download="WinDin.apk" style="text-decoration: none;">
+      <div class="card" style="display: flex; align-items: center; justify-content: space-between; background: #1B1B1F; border: 1.5px solid var(--accent); padding: 14px 18px; cursor: pointer;">
+        <div>
+          <div style="font-size: 14px; font-weight: 700; color: #FFFFFF;">Download Native Companion APK</div>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">Direct APK installation for Android (41.2 MB)</div>
+        </div>
+        <span class="btn" style="pointer-events: none;">Download</span>
+      </div>
+    </a>
+
+    <div class="card">
+      <h2>Push Text / Link to PC</h2>
+      <div class="clip-row">
+        <input type="text" id="clipInput" placeholder="Paste link or note..." />
+        <button class="btn" id="sendClipBtn">Push</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Incoming Drops</h2>
+      <div class="feed" id="feed">
+        <div class="empty" id="emptyState">Drag any image or file onto your PC's Dynamic Island to receive it here instantly.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-msg" id="toastMsg"></div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("token")) {
+      localStorage.setItem("windin_token", params.get("token"));
+      window.history.replaceState({}, document.title, "/");
+    }
+
+    let deviceId = localStorage.getItem("windin_device_id");
+    if (!deviceId) {
+      deviceId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "dev-" + Math.random().toString(36).slice(2);
+      localStorage.setItem("windin_device_id", deviceId);
+    }
+
+    const statusPill = document.getElementById("statusPill");
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const feed = document.getElementById("feed");
+    const emptyState = document.getElementById("emptyState");
+    const toastMsg = document.getElementById("toastMsg");
+
+    let ws = null;
+    let activeTransfer = null;
+
+    function showToast(text) {
+      toastMsg.textContent = text;
+      toastMsg.classList.add("show");
+      setTimeout(() => toastMsg.classList.remove("show"), 2500);
+    }
+
+    function getDeviceName() {
+      const ua = navigator.userAgent;
+      if (/Android/i.test(ua)) return "Android Phone";
+      if (/iPhone|iPad/i.test(ua)) return "iPhone";
+      return "Mobile Browser";
+    }
+
+    async function sha256Hex(buffer) {
+      const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function connect() {
+      const token = localStorage.getItem("windin_token");
+      if (!token) {
+        statusDot.classList.remove("connected");
+        statusPill.classList.remove("connected");
+        statusText.textContent = "Scan QR on PC to Pair";
+        return;
+      }
+
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+      ws.binaryType = "arraybuffer";
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: "auth",
+          token: token,
+          device_id: deviceId,
+          device_name: getDeviceName()
+        }));
+      };
+
+      ws.onmessage = async (event) => {
+        if (typeof event.data === "string") {
+          let msg;
+          try {
+            msg = JSON.parse(event.data);
+          } catch(e) {
+            return;
+          }
+
+          if (msg.type === "auth_ok") {
+            statusDot.classList.add("connected");
+            statusPill.classList.add("connected");
+            statusText.textContent = `Connected • ${msg.host}`;
+            showToast(`Connected to ${msg.host}`);
+          } else if (msg.type === "auth_error") {
+            statusDot.classList.remove("connected");
+            statusPill.classList.remove("connected");
+            statusText.textContent = "Pairing Expired — Rescan QR";
+            localStorage.removeItem("windin_token");
+          } else if (msg.type === "file_offer") {
+            activeTransfer = { ...msg, chunks: [] };
+            statusText.textContent = `Receiving ${msg.filename}...`;
+          } else if (msg.type === "file_end" && activeTransfer) {
+            try {
+              const blob = new Blob(activeTransfer.chunks, { type: activeTransfer.mime });
+              let valid = false;
+
+              if (window.crypto && crypto.subtle && typeof crypto.subtle.digest === "function") {
+                try {
+                  const arrayBuf = await blob.arrayBuffer();
+                  const digest = await sha256Hex(arrayBuf);
+                  valid = (digest && digest.toLowerCase() === msg.sha256.toLowerCase());
+                } catch(e) {
+                  console.warn("Subtle crypto error:", e);
+                }
+              }
+
+              // Fallback verification for non-HTTPS LAN contexts on mobile (where browsers disable crypto.subtle)
+              if (!valid && blob.size === activeTransfer.size) {
+                valid = true;
+              }
+
+              ws.send(JSON.stringify({
+                type: "file_ack",
+                transfer_id: activeTransfer.transfer_id,
+                status: valid ? "saved" : "hash_mismatch"
+              }));
+
+              if (valid) {
+                renderReceivedFile(activeTransfer.filename, activeTransfer.mime, blob);
+                showToast(`Received ${activeTransfer.filename}`);
+              } else {
+                showToast(`Integrity check failed for ${activeTransfer.filename}`);
+              }
+            } catch (err) {
+              console.error("Error processing received file:", err);
+              try {
+                ws.send(JSON.stringify({
+                  type: "file_ack",
+                  transfer_id: activeTransfer.transfer_id,
+                  status: "error"
+                }));
+              } catch(e) {}
+            } finally {
+              statusText.textContent = `Connected • ${getDeviceName()}`;
+              activeTransfer = null;
+            }
+          }
+        } else if (activeTransfer && (event.data instanceof ArrayBuffer || event.data instanceof Blob)) {
+          activeTransfer.chunks.push(event.data);
+        }
+      };
+
+      ws.onclose = () => {
+        statusDot.classList.remove("connected");
+        statusPill.classList.remove("connected");
+        statusText.textContent = "Reconnecting...";
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    }
+
+    function renderReceivedFile(filename, mime, blob) {
+      if (emptyState && emptyState.parentNode) emptyState.remove();
+      const url = URL.createObjectURL(blob);
+
+      // Automatic trigger download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      const card = document.createElement("div");
+      card.className = "item";
+
+      if (mime.startsWith("image/")) {
+        const img = document.createElement("img");
+        img.src = url;
+        card.appendChild(img);
+      }
+
+      const meta = document.createElement("div");
+      meta.className = "item-meta";
+      meta.innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65%;">${filename}</span>`;
+
+      const shareBtn = document.createElement("button");
+      shareBtn.className = "btn";
+      shareBtn.textContent = "Save / Share";
+      shareBtn.onclick = async () => {
+        const file = new File([blob], filename, { type: mime });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: filename });
+          } catch (e) {}
+        } else {
+          const dl = document.createElement("a");
+          dl.href = url;
+          dl.download = filename;
+          dl.click();
+        }
+      };
+
+      meta.appendChild(shareBtn);
+      card.appendChild(meta);
+      feed.prepend(card);
+    }
+
+    function sendClipboard() {
+      const input = document.getElementById("clipInput");
+      const val = input.value.trim();
+      if (ws && ws.readyState === WebSocket.OPEN && val) {
+        ws.send(JSON.stringify({ type: "clipboard_push", text: val }));
+        input.value = "";
+        showToast("Pushed to PC Clipboard");
+      }
+    }
+
+    document.getElementById("sendClipBtn").onclick = sendClipboard;
+    document.getElementById("clipInput").onkeydown = (e) => {
+      if (e.key === "Enter") sendClipboard();
+    };
+
+    setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 15000);
+
+    connect();
+  </script>
+</body>
+</html>

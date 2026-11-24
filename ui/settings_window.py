@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, QTimer, QUrl
 from PyQt6.QtGui import (
     QColor, QPainter, QBrush, QPen, QLinearGradient, QRadialGradient,
-    QFont, QDesktopServices, QGuiApplication, QPainterPath
+    QFont, QFontMetrics, QDesktopServices, QGuiApplication, QPainterPath
 )
 
 from services.settings_service import settings
@@ -45,6 +45,12 @@ class AmbientCanvasWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
 
     def paintEvent(self, event):
+        try:
+            self._do_paint_event(event)
+        except Exception:
+            pass
+
+    def _do_paint_event(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -110,6 +116,12 @@ class SwitchToggle(QWidget):
             self.setChecked(not self._checked)
 
     def paintEvent(self, event):
+        try:
+            self._do_paint_event(event)
+        except Exception:
+            pass
+
+    def _do_paint_event(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -201,6 +213,12 @@ class GeneralNotchPreview(QWidget):
         return col_hr, col_min
 
     def paintEvent(self, event):
+        try:
+            self._do_paint_event(event)
+        except Exception:
+            pass
+
+    def _do_paint_event(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -315,6 +333,12 @@ class AppearanceNotchPreview(QWidget):
         self.update()
 
     def paintEvent(self, event):
+        try:
+            self._do_paint_event(event)
+        except Exception:
+            pass
+
+    def _do_paint_event(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 

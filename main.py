@@ -1,3 +1,4 @@
+import threading
 """
 Hardware Notch Desktop Overlay for Windows 11/10
 Main Entry Point, System Tray Icon, and Application Lifecycle.
@@ -38,7 +39,7 @@ if _kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
     if "--settings" in sys.argv or "-s" in sys.argv:
         try:
             import urllib.request
-            req = urllib.request.Request("http://127.0.0.1:54321/api/open_settings")
+            req = urllib.request.Request("http://127.0.0.1:8765/open_settings")
             urllib.request.urlopen(req, timeout=1.5)
         except Exception:
             pass
@@ -47,7 +48,7 @@ if _kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
     # 1. Wake up running instance via local phone bridge HTTP endpoint (<10ms)
     try:
         import urllib.request
-        req = urllib.request.Request("http://127.0.0.1:54321/api/wake")
+        req = urllib.request.Request("http://127.0.0.1:8765/wake")
         urllib.request.urlopen(req, timeout=1.0)
     except Exception:
         pass
@@ -213,6 +214,7 @@ from services.system_service import SystemService
 from services.device_listener import DeviceService
 from services.autostart_service import set_autostart
 from services.phone_bridge import PhoneBridgeService
+from bridge.phone_bridge import PhoneBridge
 from ui.island_widget import DynamicIslandWidget
 
 
@@ -273,8 +275,24 @@ def main():
     system_service = SystemService()
     device_service = DeviceService()
     phone_service = PhoneBridgeService(port=54321)
+    phone_bridge = PhoneBridge(
+        port=8765,
+        on_wake=lambda: island.phone_signals.wake_requested.emit() if hasattr(island, "phone_signals") else None,
+        on_open_settings=lambda: island.show_settings_requested.emit() if hasattr(island, "show_settings_requested") else None,
+    )
+
+    def _run_bridge_loop():
+        try:
+            import asyncio
+            asyncio.run(phone_bridge.run_forever())
+        except Exception as e:
+            print(f"WinDin-Link bridge server error: {e}")
+
+    bridge_thread = threading.Thread(target=_run_bridge_loop, daemon=True, name="WinDinLinkBridge")
+    bridge_thread.start()
 
     island = DynamicIslandWidget(media_service, system_service, device_service)
+    island.set_phone_bridge(phone_bridge)
 
     # Restore user settings (position, screen, dock edge, theme, auto-hide)
     from services.settings_service import settings
