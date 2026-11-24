@@ -27,7 +27,7 @@ from PyQt6.QtGui import (
 # If the app is already running, notify the active instance to
 # reveal & expand the Dynamic Island immediately, then exit.
 # -------------------------------------------------------------
-MUTEX_NAME = "Global\\WinDinDynamicIsland_SingleInstanceMutex"
+MUTEX_NAME = "Local\\WinDinDynamicIsland_SingleInstanceMutex"
 _kernel32 = ctypes.windll.kernel32
 _user32 = ctypes.windll.user32
 WM_SHOW_DYNAMIC_ISLAND = _user32.RegisterWindowMessageW("WinDin_ShowDynamicIsland")
@@ -35,27 +35,33 @@ WM_SHOW_DYNAMIC_ISLAND = _user32.RegisterWindowMessageW("WinDin_ShowDynamicIslan
 _mutex_handle = _kernel32.CreateMutexW(None, True, MUTEX_NAME)
 ERROR_ALREADY_EXISTS = 183
 if _kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
-    # Another instance is already running!
-    if "--settings" in sys.argv or "-s" in sys.argv:
-        try:
-            import urllib.request
-            req = urllib.request.Request("http://127.0.0.1:8765/open_settings")
-            urllib.request.urlopen(req, timeout=1.5)
-        except Exception:
-            pass
-        sys.exit(0)
-
-    # 1. Wake up running instance via local phone bridge HTTP endpoint (<10ms)
+    # Check if a live instance is ACTUALLY responding on the local bridge
+    is_alive = False
     try:
         import urllib.request
-        req = urllib.request.Request("http://127.0.0.1:8765/wake")
-        urllib.request.urlopen(req, timeout=1.0)
+        target_endpoint = "open_settings" if ("--settings" in sys.argv or "-s" in sys.argv) else "wake"
+        req = urllib.request.Request(f"http://127.0.0.1:8765/{target_endpoint}")
+        with urllib.request.urlopen(req, timeout=0.8) as resp:
+            if resp.status == 200:
+                is_alive = True
     except Exception:
+        try:
+            import urllib.request
+            req = urllib.request.Request("http://127.0.0.1:54321/api/status")
+            with urllib.request.urlopen(req, timeout=0.5) as resp:
+                if resp.status == 200:
+                    is_alive = True
+        except Exception:
+            is_alive = False
+
+    if is_alive:
+        # A live instance was contacted and woken up; safely exit launcher
+        HWND_BROADCAST = 0xFFFF
+        _user32.PostMessageW(HWND_BROADCAST, WM_SHOW_DYNAMIC_ISLAND, 0, 0)
+        sys.exit(0)
+    else:
+        # Mutex was lingering from a killed/crashed instance with no active server; proceed to start!
         pass
-    # 2. Also broadcast native Windows message
-    HWND_BROADCAST = 0xFFFF
-    _user32.PostMessageW(HWND_BROADCAST, WM_SHOW_DYNAMIC_ISLAND, 0, 0)
-    sys.exit(0)
 
 # -------------------------------------------------------------
 # Clean Residue & Temp Cache Pruner
@@ -238,15 +244,29 @@ def create_tray_icon() -> QIcon:
     painter = QPainter(pix)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    notch_rect = QRectF(12, 16, 40, 20)
-    painter.setPen(QPen(QColor("#0A0A0C"), 1.5))
-    painter.setBrush(QBrush(QColor("#0E0E14")))
-    painter.drawRoundedRect(notch_rect, 6, 6)
+    # Obsidian squircle background
+    painter.setPen(QPen(QColor(255, 255, 255, 30), 1.0))
+    painter.setBrush(QBrush(QColor("#08080C")))
+    painter.drawRoundedRect(QRectF(4, 4, 56, 56), 14, 14)
 
-    glow_rect = QRectF(34, 22, 8, 8)
+    # Hardware notch pill cutout
+    notch_rect = QRectF(13, 24, 38, 16)
+    painter.setPen(QPen(QColor("#262630"), 1.0))
+    painter.setBrush(QBrush(QColor("#000000")))
+    painter.drawRoundedRect(notch_rect, 8, 8)
+
+    # Emerald status circle
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(QBrush(QColor("#0071E3")))
-    painter.drawEllipse(glow_rect)
+    painter.setBrush(QBrush(QColor("#34C759")))
+    painter.drawEllipse(QRectF(20, 29, 5, 5))
+
+    # Equalizer bars
+    painter.setBrush(QBrush(QColor("#FFFFFF")))
+    painter.drawRoundedRect(QRectF(30, 28, 2, 7), 1, 1)
+    painter.setBrush(QBrush(QColor("#34C759")))
+    painter.drawRoundedRect(QRectF(34, 26, 2, 11), 1, 1)
+    painter.setBrush(QBrush(QColor(255, 255, 255, 180)))
+    painter.drawRoundedRect(QRectF(38, 27, 2, 9), 1, 1)
 
     painter.end()
     return QIcon(pix)
@@ -445,11 +465,17 @@ def main():
         }
     """)
 
-    # ── Minimal Clean Taskbar Tray Menu (Settings & Quit Only) ───
-    act_settings = QAction("⚙️  Settings", tray_menu)
+    # ── Minimal Clean Taskbar Tray Menu (Settings, Pairing & Quit) ───
     from PyQt6.QtGui import QFont
-    act_settings_font = QFont("Segoe UI", 10, QFont.Weight.DemiBold)
-    act_settings.setFont(act_settings_font)
+    tray_item_font = QFont("Segoe UI", 10, QFont.Weight.DemiBold)
+
+    act_pair = QAction("Pair Phone (QR Code)...", tray_menu)
+    act_pair.setFont(tray_item_font)
+    act_pair.triggered.connect(island.open_qr_pairing_modal)
+    tray_menu.addAction(act_pair)
+
+    act_settings = QAction("Settings...", tray_menu)
+    act_settings.setFont(tray_item_font)
     act_settings.triggered.connect(show_settings)
     tray_menu.addAction(act_settings)
     tray_menu.addSeparator()

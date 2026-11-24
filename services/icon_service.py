@@ -556,6 +556,71 @@ def _render_vector_brand_logo(app_name: str, size: int = 48, accent_col: Optiona
     return pix
 
 
+def render_brand_logo(size: int = 48) -> QPixmap:
+    """
+    Renders or loads the canonical WindowLand Dynamic Island brand logo
+    generated from gemini-svg.svg (hardware notch cutout with emerald beacon and audio spectrum bars).
+    Follows AGENTS.md Rule 1 (Zero emojis) and Rule 3 (Defensive rendering).
+    """
+    try:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        svg_path = os.path.join(base_dir, "assets", "app_logo.svg")
+        if not os.path.exists(svg_path):
+            svg_path = os.path.join(base_dir, "gemini-svg.svg")
+        
+        if os.path.exists(svg_path):
+            from PyQt6.QtSvg import QSvgRenderer
+            renderer = QSvgRenderer(svg_path)
+            pix = QPixmap(size, size)
+            pix.fill(Qt.GlobalColor.transparent)
+            p = QPainter(pix)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            renderer.render(p, QRectF(0, 0, size, size))
+            p.end()
+            return pix
+    except Exception:
+        pass
+
+    try:
+        png_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "app_logo.png")
+        if os.path.exists(png_path):
+            pix = QPixmap(png_path)
+            if not pix.isNull():
+                return pix.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    except Exception:
+        pass
+
+    # Direct defensive fallback rendering using QPainter
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    s = float(size)
+    r = QRectF(s * 0.06, s * 0.06, s * 0.88, s * 0.88)
+    p.setPen(QPen(QColor(255, 255, 255, 30), 1.0))
+    p.setBrush(QBrush(QColor("#08080C")))
+    p.drawRoundedRect(r, s * 0.22, s * 0.22)
+    # Notch pill
+    notch = QRectF(s * 0.21, s * 0.38, s * 0.58, s * 0.24)
+    p.setPen(QPen(QColor("#262630"), 1.0))
+    p.setBrush(QBrush(QColor("#000000")))
+    p.drawRoundedRect(notch, s * 0.12, s * 0.12)
+    # Emerald circle
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor("#34C759")))
+    p.drawEllipse(QRectF(s * 0.31, s * 0.46, s * 0.08, s * 0.08))
+    # Bars
+    p.setBrush(QBrush(QColor("#FFFFFF")))
+    p.drawRoundedRect(QRectF(s * 0.48, s * 0.44, s * 0.03, s * 0.12), s * 0.015, s * 0.015)
+    p.setBrush(QBrush(QColor("#34C759")))
+    p.drawRoundedRect(QRectF(s * 0.54, s * 0.40, s * 0.03, s * 0.18), s * 0.015, s * 0.015)
+    p.setBrush(QBrush(QColor(255, 255, 255, 180)))
+    p.drawRoundedRect(QRectF(s * 0.60, s * 0.42, s * 0.03, s * 0.14), s * 0.015, s * 0.015)
+    p.end()
+    return pix
+
+
 def get_app_icon(
     app_name: str,
     target_size: int = 48,
@@ -574,8 +639,14 @@ def get_app_icon(
     clean_name = (app_name or "Notification").strip()
     cache_key = f"{clean_name.lower()}_{target_size}"
 
+    # Return brand logo for WindowLand / DynamicIsland / WinDin
+    if clean_name.lower() in ("windowland", "dynamicisland", "windin", "island", "control center"):
+        brand_icon = render_brand_logo(size=target_size)
+        _APP_ICON_CACHE[cache_key] = brand_icon
+        return brand_icon
+
     # Return canonical uniform notification icon for generic/system notification alerts
-    if clean_name.lower() in ("notification", "notifications", "alert", "alerts", "system alert", "system", "windowland", "dynamicisland", "quick alert", "toast", ""):
+    if clean_name.lower() in ("notification", "notifications", "alert", "alerts", "system alert", "system", "quick alert", "toast", ""):
         uniform_icon = render_uniform_notification_icon(size=target_size, accent_col=accent_color, solid_col=solid_color)
         _APP_ICON_CACHE[cache_key] = uniform_icon
         return uniform_icon

@@ -136,14 +136,13 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
     width: 38px;
     height: 38px;
     border-radius: 11px;
-    background: var(--primary-grad);
+    background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 16px rgba(255, 67, 168, 0.35);
     flex-shrink: 0;
   }
-  .brand-logo svg { width: 22px; height: 22px; color: #FFFFFF; }
+  .brand-logo svg { width: 100%; height: 100%; }
   .brand-info { display: flex; flex-direction: column; }
   .brand-title {
     font-family: var(--font-heading);
@@ -705,9 +704,24 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
     <div>
       <div class="brand-header">
         <div class="brand-logo">
-          <!-- Vector Tree Logo (Zero Emoji Rule) -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L4 12h4l-3 6h7v4h0v-4h7l-3-6h4z"/>
+          <!-- WindowLand Dynamic Island Brand Logo -->
+          <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="bg_b1" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#16161D" />
+                <stop offset="100%" stop-color="#07070A" />
+              </linearGradient>
+              <linearGradient id="rim_b1" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.22" />
+                <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.06" />
+              </linearGradient>
+            </defs>
+            <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg_b1)" stroke="url(#rim_b1)" stroke-width="4" />
+            <rect x="108" y="196" width="296" height="120" rx="60" fill="#000000" stroke="#262630" stroke-width="4" />
+            <circle cx="176" cy="256" r="18" fill="#34C759" />
+            <rect x="248" y="236" width="14" height="40" rx="7" fill="#FFFFFF" />
+            <rect x="278" y="220" width="14" height="72" rx="7" fill="#34C759" />
+            <rect x="308" y="232" width="14" height="48" rx="7" fill="#FFFFFF" fill-opacity="0.7" />
           </svg>
         </div>
         <div class="brand-info">
@@ -756,8 +770,23 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
     <div class="mobile-brand-bar">
       <div style="display:flex; align-items:center; gap:8px;">
         <div class="brand-logo" style="width:30px; height:30px; border-radius:8px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px;">
-            <path d="M12 2L4 12h4l-3 6h7v4h0v-4h7l-3-6h4z"/>
+          <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="bg_b2" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#16161D" />
+                <stop offset="100%" stop-color="#07070A" />
+              </linearGradient>
+              <linearGradient id="rim_b2" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.22" />
+                <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.06" />
+              </linearGradient>
+            </defs>
+            <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg_b2)" stroke="url(#rim_b2)" stroke-width="4" />
+            <rect x="108" y="196" width="296" height="120" rx="60" fill="#000000" stroke="#262630" stroke-width="4" />
+            <circle cx="176" cy="256" r="18" fill="#34C759" />
+            <rect x="248" y="236" width="14" height="40" rx="7" fill="#FFFFFF" />
+            <rect x="278" y="220" width="14" height="72" rx="7" fill="#34C759" />
+            <rect x="308" y="232" width="14" height="48" rx="7" fill="#FFFFFF" fill-opacity="0.7" />
           </svg>
         </div>
         <span style="font-family:var(--font-heading); font-weight:700; font-size:14px;">WindowLand</span>
@@ -1255,8 +1284,23 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
       <div class="glass-card">
         <div style="display:flex; align-items:center; gap:16px;">
           <div class="brand-logo" style="width:52px; height:52px; border-radius:14px;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:30px; height:30px;">
-              <path d="M12 2L4 12h4l-3 6h7v4h0v-4h7l-3-6h4z"/>
+            <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="bg_b3" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#16161D" />
+                  <stop offset="100%" stop-color="#07070A" />
+                </linearGradient>
+                <linearGradient id="rim_b3" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.22" />
+                  <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.06" />
+                </linearGradient>
+              </defs>
+              <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg_b3)" stroke="url(#rim_b3)" stroke-width="4" />
+              <rect x="108" y="196" width="296" height="120" rx="60" fill="#000000" stroke="#262630" stroke-width="4" />
+              <circle cx="176" cy="256" r="18" fill="#34C759" />
+              <rect x="248" y="236" width="14" height="40" rx="7" fill="#FFFFFF" />
+              <rect x="278" y="220" width="14" height="72" rx="7" fill="#34C759" />
+              <rect x="308" y="232" width="14" height="48" rx="7" fill="#FFFFFF" fill-opacity="0.7" />
             </svg>
           </div>
           <div>

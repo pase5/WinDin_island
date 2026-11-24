@@ -67,6 +67,12 @@ class PhoneBridge:
         on_clipboard_received: Optional[Callable[[str], None]] = None,
         on_wake: Optional[Callable[[], None]] = None,
         on_open_settings: Optional[Callable[[], None]] = None,
+        on_remote_action: Optional[Callable[[str, str], None]] = None,
+        on_battery_sync: Optional[Callable[[int, bool, str], None]] = None,
+        on_notification_push: Optional[Callable[[str, str, str], None]] = None,
+        on_incoming_file_start: Optional[Callable[[str, int], None]] = None,
+        on_incoming_file_progress: Optional[Callable[[float], None]] = None,
+        on_incoming_file_complete: Optional[Callable[[bool, str, str], None]] = None,
     ) -> None:
         self.port = port
         self.hostname = socket.gethostname()
@@ -76,11 +82,18 @@ class PhoneBridge:
         self.on_clipboard_received = on_clipboard_received
         self.on_wake = on_wake
         self.on_open_settings = on_open_settings
+        self.on_remote_action = on_remote_action
+        self.on_battery_sync = on_battery_sync
+        self.on_notification_push = on_notification_push
+        self.on_incoming_file_start = on_incoming_file_start
+        self.on_incoming_file_progress = on_incoming_file_progress
+        self.on_incoming_file_complete = on_incoming_file_complete
 
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.active_phone: Optional[ServerConnection] = None
         self.active_device_name: str = ""
         self._pending_acks: dict[str, asyncio.Future] = {}
+        self._incoming_tx: Optional[dict] = None
         self._aiozc: Optional[AsyncZeroconf] = None
         self._service_info: Optional[ServiceInfo] = None
         self._server = None
@@ -248,15 +261,40 @@ class PhoneBridge:
             async for message in ws:
                 if isinstance(message, str):
                     await self._handle_json_frame(ws, message)
+                elif isinstance(message, (bytes, bytearray)):
+                    await self._handle_binary_frame(ws, bytes(message))
 
         except Exception as exc:
             logger.warning(f"Client session ended: {exc}")
         finally:
+            if self._incoming_tx and self._incoming_tx.get("file"):
+                try:
+                    self._incoming_tx["file"].close()
+                except Exception:
+                    pass
+                try:
+                    self._incoming_tx["temp_path"].unlink(missing_ok=True)
+                except Exception:
+                    pass
+                self._incoming_tx = None
+
             if self.active_phone == ws:
                 self.active_phone = None
                 self.active_device_name = ""
                 if self.on_connection_change:
                     self.on_connection_change(False, "")
+
+    async def _handle_binary_frame(self, ws: ServerConnection, data: bytes) -> None:
+        if self._incoming_tx and self._incoming_tx.get("file"):
+            try:
+                self._incoming_tx["file"].write(data)
+                self._incoming_tx["sha256"].update(data)
+                self._incoming_tx["received"] += len(data)
+                if self.on_incoming_file_progress and self._incoming_tx["size"] > 0:
+                    prog = min(1.0, self._incoming_tx["received"] / self._incoming_tx["size"])
+                    self.on_incoming_file_progress(prog)
+            except Exception as e:
+                logger.error(f"Error writing incoming binary chunk: {e}")
 
     async def _handle_json_frame(self, ws: ServerConnection, raw: str) -> None:
         try:
@@ -274,6 +312,77 @@ class PhoneBridge:
                 fut.set_result(data.get("status", "saved"))
         elif msg_type == "clipboard_push" and self.on_clipboard_received:
             self.on_clipboard_received(data.get("text", ""))
+
+        elif msg_type == "phone_file_offer":
+            # Incoming file stream from phone to PC
+            tx_id = data.get("transfer_id", f"tx_{uuid.uuid4().hex[:8]}")
+            filename = data.get("filename", "received_file")
+            size = data.get("size", 0)
+            drops_dir = Path.home() / "Downloads" / "WinDin_Drops"
+            drops_dir.mkdir(parents=True, exist_ok=True)
+            temp_path = drops_dir / f".part_{tx_id}"
+            try:
+                out_f = open(temp_path, "wb")
+            except Exception as e:
+                logger.error(f"Failed to open temp file for incoming upload: {e}")
+                return
+
+            self._incoming_tx = {
+                "id": tx_id,
+                "filename": filename,
+                "size": size,
+                "received": 0,
+                "sha256": hashlib.sha256(),
+                "file": out_f,
+                "temp_path": temp_path,
+                "final_path": drops_dir / filename,
+            }
+            if self.on_incoming_file_start:
+                self.on_incoming_file_start(filename, size)
+
+        elif msg_type == "phone_file_end":
+            expected_hash = data.get("sha256", "")
+            tx_id = data.get("transfer_id", "")
+            if self._incoming_tx and self._incoming_tx["id"] == tx_id:
+                try:
+                    self._incoming_tx["file"].close()
+                    actual_hash = self._incoming_tx["sha256"].hexdigest()
+                    if not expected_hash or actual_hash.lower() == expected_hash.lower():
+                        target = self._incoming_tx["final_path"]
+                        if target.exists():
+                            import time
+                            target = target.parent / f"{target.stem}_{int(time.time())}{target.suffix}"
+                        import shutil
+                        shutil.move(str(self._incoming_tx["temp_path"]), str(target))
+                        await ws.send(json.dumps({"type": "phone_file_ack", "transfer_id": tx_id, "status": "saved"}))
+                        if self.on_incoming_file_complete:
+                            self.on_incoming_file_complete(True, str(target), self._incoming_tx["filename"])
+                    else:
+                        self._incoming_tx["temp_path"].unlink(missing_ok=True)
+                        await ws.send(json.dumps({"type": "phone_file_ack", "transfer_id": tx_id, "status": "hash_mismatch"}))
+                        if self.on_incoming_file_complete:
+                            self.on_incoming_file_complete(False, "", "Integrity mismatch")
+                except Exception as e:
+                    logger.error(f"Error finalizing incoming file: {e}")
+                finally:
+                    self._incoming_tx = None
+
+        elif msg_type == "pc_action" and self.on_remote_action:
+            action = data.get("action", "")
+            param = data.get("param", "")
+            self.on_remote_action(action, param)
+
+        elif msg_type == "battery_sync" and self.on_battery_sync:
+            level = int(data.get("level", 100))
+            charging = bool(data.get("charging", False))
+            device = str(data.get("device_name", self.active_device_name or "Phone"))
+            self.on_battery_sync(level, charging, device)
+
+        elif msg_type == "notification_push" and self.on_notification_push:
+            app = data.get("app", "Phone")
+            title = data.get("title", "")
+            message = data.get("message", "")
+            self.on_notification_push(app, title, message)
 
     async def send_file_to_phone(
         self,

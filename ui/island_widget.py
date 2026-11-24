@@ -77,6 +77,10 @@ class PhoneBridgeSignals(QObject):
     file_completed = pyqtSignal(bool, str)
     wake_requested = pyqtSignal()
     open_settings_requested = pyqtSignal()
+    remote_action = pyqtSignal(str, str)
+    battery_synced = pyqtSignal(int, bool, str)
+    notification_pushed = pyqtSignal(str, str, str)
+    incoming_file_started = pyqtSignal(str, int)
 
 
 
@@ -757,6 +761,10 @@ class DynamicIslandWidget(QWidget):
         self.phone_signals.file_progress.connect(self._on_bridge_file_progress)
         self.phone_signals.file_completed.connect(self._on_bridge_file_completed)
         self.phone_signals.wake_requested.connect(self.wake_up)
+        self.phone_signals.remote_action.connect(self._on_remote_action)
+        self.phone_signals.battery_synced.connect(self._on_battery_synced)
+        self.phone_signals.notification_pushed.connect(self._on_notification_pushed)
+        self.phone_signals.incoming_file_started.connect(self._on_incoming_file_started)
         if hasattr(self, "show_settings_requested"):
             self.phone_signals.open_settings_requested.connect(self.show_settings_requested.emit)
 
@@ -776,6 +784,9 @@ class DynamicIslandWidget(QWidget):
         self._qr_modal: Optional[QRPairingModal] = None
         self._phone_bridge_connected = False
         self._phone_bridge_device = ""
+        self._last_phone_connect_toast_time = 0.0
+        self._phone_disconnected_time = 0.0
+        self._last_phone_low_battery_warn_time = 0.0
 
         self._setup_window_flags()
 
@@ -1223,7 +1234,7 @@ class DynamicIslandWidget(QWidget):
 
         p = self.get_expand_progress()
         is_transfer = getattr(self, "_transfer_active", False)
-        if state == "expanded" and p >= 0.25 and not (is_transfer and getattr(self, "_transfer_fade_val", 1.0) >= 0.99):
+        if state == "expanded" and p >= 0.25 and not is_transfer:
             for c in all_containers:
                 if c is not None:
                     if c is active_container:
@@ -1830,31 +1841,6 @@ class DynamicIslandWidget(QWidget):
         controls_layout.addWidget(self.btn_play)
         controls_layout.addWidget(self.btn_next)
         controls_layout.addStretch()
-
-        self.btn_pair_phone = QPushButton("Pair Phone", self.dashboard_container)
-        self.btn_pair_phone.setFixedHeight(24)
-        self.btn_pair_phone.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.btn_pair_phone.setFont(get_microlabel_font())
-        self.btn_pair_phone.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(20, 20, 24, 0.90);
-                color: #A3E635;
-                border: 1px solid rgba(163, 230, 53, 0.45);
-                border-radius: 12px;
-                padding: 0 12px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #A3E635;
-                color: #0A0A0A;
-                border-color: #A3E635;
-            }
-            QPushButton:pressed {
-                background-color: #84CC16;
-            }
-        """)
-        self.btn_pair_phone.clicked.connect(self.open_qr_pairing_modal)
-        controls_layout.addWidget(self.btn_pair_phone)
 
         main_layout.addLayout(controls_layout)
 
@@ -2975,8 +2961,81 @@ class DynamicIslandWidget(QWidget):
         bridge.on_clipboard_received = lambda txt: self.phone_signals.clipboard_received.emit(txt)
         bridge.on_wake = lambda: self.phone_signals.wake_requested.emit()
         bridge.on_open_settings = lambda: self.phone_signals.open_settings_requested.emit()
+        bridge.on_remote_action = lambda act, p: self.phone_signals.remote_action.emit(act, p)
+        bridge.on_battery_sync = lambda lvl, chg, dev: self.phone_signals.battery_synced.emit(lvl, chg, dev)
+        bridge.on_notification_push = lambda app, t, m: self.phone_signals.notification_pushed.emit(app, t, m)
+        bridge.on_incoming_file_start = lambda fn, sz: self.phone_signals.incoming_file_started.emit(fn, sz)
+        bridge.on_incoming_file_progress = lambda p: self.phone_signals.file_progress.emit(p)
+        bridge.on_incoming_file_complete = lambda ok, path, fn: self.phone_signals.file_completed.emit(ok, fn)
         if self._qr_modal:
             self._qr_modal.set_bridge(bridge)
+
+    def _on_remote_action(self, action: str, param: str):
+        try:
+            if action == "play_pause":
+                self.media_service.toggle_play_pause()
+            elif action == "next":
+                self.media_service.next_track()
+            elif action == "prev":
+                self.media_service.previous_track()
+            elif action == "toggle_mute":
+                self.system_service.toggle_mute()
+            elif action == "lock_pc":
+                import ctypes
+                ctypes.windll.user32.LockWorkStation()
+            elif action == "screenshot":
+                self.system_service.take_screenshot()
+            elif action == "toggle_island":
+                self.toggle_expanded()
+            elif action == "dock_edge" and param:
+                self.set_dock_edge(param)
+        except Exception:
+            pass
+
+    def _on_battery_synced(self, level: int, is_charging: bool, device_name: str):
+        try:
+            self._phone_battery = max(0, min(100, level))
+            self._phone_charging = is_charging
+            if device_name:
+                self._phone_bridge_device = device_name
+            if hasattr(self, "lbl_exp_phone_battery"):
+                self.lbl_exp_phone_battery.setText(f"{self._phone_battery}%")
+
+            # Only trigger a warning toast if critically low (<= 15%), discharging, and not warned in last 30 min
+            now = time.time()
+            if not is_charging and level <= 15 and (now - getattr(self, "_last_phone_low_battery_warn_time", 0.0) >= 1800.0):
+                self._last_phone_low_battery_warn_time = now
+                dev = device_name or "Phone"
+                self.trigger_toast("Phone Battery", f"{dev} Low Battery", f"{level}% remaining • Connect charger", timeout_ms=3000)
+                self.set_glow_state("warning", duration_sec=2.5)
+
+            self.update()
+        except Exception:
+            pass
+
+    def _on_notification_pushed(self, app: str, title: str, message: str):
+        try:
+            self.trigger_toast(app, title, message)
+            self.set_glow_state("notification", duration_sec=3.0)
+        except Exception:
+            pass
+
+    def _on_incoming_file_started(self, filename: str, size: int):
+        try:
+            self._transfer_active = True
+            self._transfer_progress = 0.01
+            self._transfer_status = "sending"
+            self._transfer_filename = f"Receiving {filename}"
+            self._transfer_fade_val = 1.0
+            self._wave_time = 0.0
+            if hasattr(self, "_transfer_wave_timer") and not self._transfer_wave_timer.isActive():
+                self._transfer_wave_timer.start(16)
+            self.set_island_state("expanded")
+            self._update_child_visibility("expanded")
+            self.set_glow_state("notification", duration_sec=3.0)
+            self.update()
+        except Exception:
+            pass
 
     def open_qr_pairing_modal(self):
         if not self._qr_modal:
@@ -2987,16 +3046,42 @@ class DynamicIslandWidget(QWidget):
 
     def _on_bridge_connection_changed(self, connected: bool, device_name: str):
         try:
-            self._phone_bridge_connected = connected
-            self._phone_bridge_device = device_name
+            was_connected = getattr(self, "_phone_bridge_connected", False)
+            now = time.time()
+            is_qr_modal_active = bool(self._qr_modal and self._qr_modal.isVisible())
+
             if self._qr_modal and self._qr_modal.isVisible():
                 self._qr_modal.set_connected(connected, device_name)
                 # Auto-close floating pairing modal so dock-aware island toast takes over
                 self._qr_modal.close_modal()
+
+            self._phone_bridge_connected = connected
+            if device_name:
+                self._phone_bridge_device = device_name
+
             if connected:
-                dev = device_name or "Phone"
-                self.trigger_toast("WinDin-Link", f"Connected • {dev}", "Continuity Bridge Active", timeout_ms=2200)
-                self.set_glow_state("success", duration_sec=2.2)
+                time_since_toast = now - getattr(self, "_last_phone_connect_toast_time", 0.0)
+                time_disconnected = now - getattr(self, "_phone_disconnected_time", 0.0)
+
+                # Avoid showing "phone is connected" multiple times:
+                # 1. Never show if already connected (suppress keepalive or re-auth chatter)
+                # 2. If user scanned QR pairing modal, show once as confirmation
+                # 3. For background reconnects, suppress if shown in the last 10 minutes (600s)
+                #    or if the disconnection was merely a momentary network blip (< 60s downtime)
+                should_toast = is_qr_modal_active or (
+                    not was_connected and
+                    time_since_toast >= 600.0 and
+                    time_disconnected >= 60.0
+                )
+
+                if should_toast:
+                    self._last_phone_connect_toast_time = now
+                    dev = device_name or "Phone"
+                    self.trigger_toast("WinDin-Link", f"Connected • {dev}", "Continuity Bridge Active", timeout_ms=2200)
+                    self.set_glow_state("success", duration_sec=2.2)
+            else:
+                self._phone_disconnected_time = now
+
             self.update()
         except Exception:
             pass

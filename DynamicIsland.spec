@@ -53,6 +53,7 @@ a = Analysis(
         'PIL.Image',
         'PIL.ImageFilter',
         'PIL.ImageEnhance',
+        'PyQt6.QtSvg',
     ],
     hookspath=[],
     hooksconfig={},

@@ -475,15 +475,17 @@ class SettingsWindow(QMainWindow):
         header_layout = QHBoxLayout()
         header_layout.setSpacing(12)
 
-        # Rounded-xl gradient badge with tree symbol
+        # Rounded-xl gradient badge with WindowLand brand logo
         logo_frame = QFrame()
         logo_frame.setFixedSize(40, 40)
         logo_frame.setObjectName("brandLogoBadge")
         lf_layout = QVBoxLayout(logo_frame)
-        lf_layout.setContentsMargins(0, 0, 0, 0)
-        lbl_logo_icon = QLabel("🌲")
+        lf_layout.setContentsMargins(4, 4, 4, 4)
+        lbl_logo_icon = QLabel()
+        from services.icon_service import render_brand_logo
+        lbl_logo_icon.setPixmap(render_brand_logo(32))
         lbl_logo_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_logo_icon.setStyleSheet("font-size: 20px; background: transparent;")
+        lbl_logo_icon.setStyleSheet("background: transparent;")
         lf_layout.addWidget(lbl_logo_icon)
 
         title_box = QVBoxLayout()
@@ -1180,10 +1182,12 @@ class SettingsWindow(QMainWindow):
         ibox.setFixedSize(64, 64)
         ibox.setObjectName("aboutLogoBadge")
         ib_layout = QVBoxLayout(ibox)
-        ib_layout.setContentsMargins(0, 0, 0, 0)
-        lbl_ai = QLabel("🌲")
+        ib_layout.setContentsMargins(6, 6, 6, 6)
+        lbl_ai = QLabel()
+        from services.icon_service import render_brand_logo
+        lbl_ai.setPixmap(render_brand_logo(52))
         lbl_ai.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_ai.setStyleSheet("font-size: 32px; background: transparent;")
+        lbl_ai.setStyleSheet("background: transparent;")
         ib_layout.addWidget(lbl_ai)
         ih.addWidget(ibox)
 
@@ -1563,12 +1567,13 @@ class SettingsWindow(QMainWindow):
                 background-color: transparent;
             }
             #brandLogoBadge {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #FF43A8, stop:1 #7C03D3);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #16161D, stop:1 #07070A);
+                border: 1px solid rgba(255, 255, 255, 0.15);
                 border-radius: 12px;
             }
             #aboutLogoBadge {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(255, 67, 168, 0.3), stop:0.5 rgba(124, 3, 211, 0.3), stop:1 rgba(78, 222, 163, 0.25));
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #16161D, stop:1 #07070A);
+                border: 1px solid rgba(255, 255, 255, 0.18);
                 border-radius: 16px;
             }
             #settingsCard {
