@@ -395,23 +395,88 @@ def main():
     phone_service.dock_requested.connect(lambda edge: island.set_dock_edge(edge))
     phone_service.toggle_requested.connect(island.toggle_expanded)
 
+    PRESETS_MAP = {
+        "ambient": ("ambient", "#08080C", "#08080C"),
+        "obsidian": ("solid", "#08080C", "#08080C"),
+        "titanium": ("solid", "#181A22", "#181A22"),
+        "midnight": ("gradient", "#0A1628", "#050912"),
+        "emerald": ("gradient", "#081C15", "#040B09"),
+        "ember": ("gradient", "#231116", "#0B0709"),
+        "sunset": ("gradient", "#231116", "#0B0709"),
+        "violet": ("gradient", "#1A102B", "#08060E"),
+        "slate": ("gradient", "#222530", "#101218"),
+    }
+
     def on_phone_theme(data: dict):
-        mode = data.get("mode", "ambient")
+        if not data:
+            return
+        preset = data.get("preset")
+        if preset and preset in PRESETS_MAP:
+            mode, c1, c2 = PRESETS_MAP[preset]
+            data["theme_preset"] = preset
+            data["theme_mode"] = mode
+            if mode == "gradient":
+                data["gradient_c1"] = c1
+                data["gradient_c2"] = c2
+            elif mode == "solid":
+                data["solid_color"] = c1
+
+        if "c1" in data and "gradient_c1" not in data:
+            data["gradient_c1"] = data["c1"]
+        if "c2" in data and "gradient_c2" not in data:
+            data["gradient_c2"] = data["c2"]
+
+        if "mode" in data and "theme_mode" not in data:
+            data["theme_mode"] = data["mode"]
+
+        mode = data.get("theme_mode", "ambient")
         if mode == "ambient":
-            island.set_theme_ambient()
-        elif mode == "solid":
-            col = data.get("color", "#08080C")
-            island.set_theme_solid(QColor(col))
-        elif mode == "frosted":
-            island.set_theme_solid(QColor(30, 32, 42, 230))
-        if "opacity" in data:
             try:
-                op = float(data["opacity"])
-                island.set_ambient_opacity(op)
+                op = float(data.get("ambient_opacity", data.get("opacity", 0.24)))
+                island.set_theme_ambient(op)
             except Exception:
-                pass
+                island.set_theme_ambient()
+        elif mode == "gradient":
+            c1 = QColor(data.get("gradient_c1", "#0A1628"))
+            c2 = QColor(data.get("gradient_c2", "#050912"))
+            island.set_theme_gradient(c1, c2)
+        elif mode in ("obsidian", "solid"):
+            col = data.get("solid_color", data.get("color", "#08080C"))
+            island.set_theme_solid(QColor(col))
+        elif mode in ("titanium", "frosted"):
+            col = data.get("solid_color", data.get("color", "#181A22"))
+            island.set_theme_solid(QColor(col))
+
+        if "clock_accent" in data:
+            island._clock_accent = str(data["clock_accent"])
+            island.update()
+        if "show_border" in data:
+            val = str(data["show_border"]).lower() in ("true", "1", "yes")
+            island._show_border = val
+            island.update()
+        if "hover_to_expand" in data:
+            island._hover_to_expand = str(data["hover_to_expand"]).lower() in ("true", "1", "yes")
+        if "auto_hide" in data:
+            val = str(data["auto_hide"]).lower() in ("true", "1", "yes")
+            island.set_auto_hide(val)
+        if "time_format" in data:
+            tf = str(data["time_format"]).lower()
+            island.use_24h_format = (tf in ("24h", "true", "24-hour"))
+            island.update()
+        if "dock_edge" in data:
+            island.set_dock_edge(str(data["dock_edge"]))
+
+        # Persist changes
+        try:
+            settings.update(**data)
+        except Exception:
+            pass
+
+    def on_phone_settings(data: dict):
+        on_phone_theme(data)
 
     phone_service.theme_requested.connect(on_phone_theme)
+    phone_service.settings_requested.connect(on_phone_settings)
 
     def on_phone_simulate(kind: str):
         if kind == "osd":

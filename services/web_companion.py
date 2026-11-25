@@ -494,7 +494,119 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
   }
   .dock-cell.active svg, .dock-cell.active span { color: #FFFFFF; font-weight: 700; }
 
-  /* ── Surface Materials & Color Swatches ─────────────── */
+  /* ── Surface Materials & 8 Theme Presets ───────────── */
+  .preset-grid-theme {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .theme-tile {
+    background: var(--surface-nested);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 12px 10px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.18s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+  }
+  .theme-tile:hover {
+    background: var(--surface-nested-hover);
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+  }
+  .theme-tile.active {
+    background: rgba(10, 132, 255, 0.18);
+    border-color: #0A84FF;
+    box-shadow: 0 0 14px rgba(10, 132, 255, 0.35);
+  }
+  .theme-tile-badge {
+    width: 24px;
+    height: 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+  }
+  .theme-tile-name {
+    font-weight: 600;
+    font-size: 11.5px;
+    color: #F2F2F7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* ── Clock Accent Colors ────────────────────────────── */
+  .clock-accent-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .clock-accent-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .clock-accent-btn:hover { transform: scale(1.14); }
+  .clock-accent-btn.active {
+    border-color: #FFFFFF;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.65);
+  }
+  .clock-auto-btn {
+    padding: 5px 14px;
+    border-radius: 14px;
+    background: var(--surface-nested);
+    border: 1px solid var(--border-glass);
+    color: #F2F2F7;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .clock-auto-btn.active {
+    background: #0A84FF;
+    border-color: #0A84FF;
+    color: #FFFFFF;
+  }
+
+  /* ── Custom Dual Gradient Row ───────────────────────── */
+  .gradient-editor-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .gradient-preview-bar {
+    height: 24px;
+    flex: 1;
+    min-width: 120px;
+    border-radius: 8px;
+    border: 1px solid var(--border-glass);
+  }
+  .color-chip-input {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--border-glass);
+    border-radius: 10px;
+    background: none;
+    cursor: pointer;
+  }
+
   .material-deck {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -683,6 +795,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
     .dock-cell { padding: 12px 6px; }
     .dock-cell span { font-size: 10.5px; }
     .material-deck { grid-template-columns: 1fr; }
+    .preset-grid-theme { grid-template-columns: repeat(2, 1fr); }
     .swatch-palette { grid-template-columns: repeat(2, 1fr); }
     .preset-grid { grid-template-columns: 1fr; }
     .view-title { font-size: 22px; }
@@ -867,21 +980,35 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
         </div>
       </div>
 
-      <div class="section-eyebrow">ISLAND BEHAVIOR</div>
+      <div class="section-eyebrow">ISLAND BEHAVIOR & STARTUP</div>
       <div class="glass-card">
         <div class="setting-row">
           <div class="row-info">
             <span class="row-title">Auto-Hide when Idle</span>
             <span class="row-desc">Collapses the island into an ultra-thin hidden tab when idle. Expands smoothly on hover.</span>
           </div>
-          <div class="switch-toggle" id="toggleAutoHide" onclick="toggleSwitch('toggleAutoHide')"></div>
+          <div class="switch-toggle" id="toggleAutoHide" onclick="toggleSetting('auto_hide')"></div>
+        </div>
+        <div class="setting-row">
+          <div class="row-info">
+            <span class="row-title">Hover to Expand</span>
+            <span class="row-desc">Instantly expands the island when hovering over the compact notch pill.</span>
+          </div>
+          <div class="switch-toggle" id="toggleHover" onclick="toggleSetting('hover_to_expand')"></div>
+        </div>
+        <div class="setting-row">
+          <div class="row-info">
+            <span class="row-title">Launch at Windows Startup</span>
+            <span class="row-desc">Automatically launch WindowLand when signing in to Windows.</span>
+          </div>
+          <div class="switch-toggle" id="toggleAutostart" onclick="toggleSetting('autostart')"></div>
         </div>
         <div class="setting-row">
           <div class="row-info">
             <span class="row-title">24-Hour Clock Format</span>
             <span class="row-desc">Format used for the compact notch clock and schedule notifications.</span>
           </div>
-          <div class="switch-toggle active" id="toggle24H" onclick="toggleSwitch('toggle24H')"></div>
+          <div class="switch-toggle active" id="toggle24H" onclick="toggleSetting('time_format')"></div>
         </div>
       </div>
     </section>
@@ -890,15 +1017,16 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
     <section id="tab-appearance" class="tab-pane" style="display:none;">
       <div class="view-header">
         <h1 class="view-title">Appearance & Theme</h1>
-        <p class="view-subtitle">Personalize surface materials, accent gradients, and ambient backlight glow.</p>
+        <p class="view-subtitle">Personalize surface presets, custom colors, clock accent, and ambient backlight glow.</p>
       </div>
 
       <div class="section-eyebrow">LIVE PREVIEW</div>
       <div class="glass-card" style="padding:18px;">
         <div class="notch-preview-stage" id="appearanceStage" style="height:140px;">
           <div class="preview-notch-pill" id="appearancePill" style="padding:8px 24px;">
-            <div class="beacon-dot" style="background:#10B981; box-shadow:0 0 10px #10B981;"></div>
-            <span style="font-weight:600; font-size:13px;" id="themeTrackTitle">WindowLand Dynamic Island</span>
+            <div class="beacon-dot" id="prevBeacon" style="background:#10B981; box-shadow:0 0 10px #10B981;"></div>
+            <span style="font-weight:600; font-size:13px;" id="themeTrackTitle">Dynamic Island</span>
+            <span style="font-weight:700; font-size:12.5px; margin-left:6px;" id="previewClockAppearance">19:<span id="previewMinuteAccent" style="color:#FFFFFF;">30</span></span>
             <div class="preview-equalizer">
               <div class="eq-bar" style="background:#FF43A8"></div>
               <div class="eq-bar" style="background:#7C03D3"></div>
@@ -909,66 +1037,105 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
         </div>
       </div>
 
-      <div class="section-eyebrow">SURFACE MATERIAL & MODE</div>
+      <div class="section-eyebrow">THEME PRESETS (8 CURATED STYLES)</div>
       <div class="glass-card">
-        <div class="material-deck">
-          <div class="material-tile active" id="mat-ambient" onclick="selectMaterial('ambient', this)">
-            <div class="material-title">Ambient Reactive</div>
-            <div class="material-sub">Dynamic Cover Art Glow</div>
+        <div class="preset-grid-theme">
+          <div class="theme-tile active" id="preset-ambient" onclick="selectPreset('ambient', this)">
+            <div class="theme-tile-badge" style="background:linear-gradient(135deg, #FF43A8, #7C03D3);"></div>
+            <span class="theme-tile-name">Ambient Reactive</span>
           </div>
-          <div class="material-tile" id="mat-obsidian" onclick="selectMaterial('solid', this, '#08080C')">
-            <div class="material-title">OLED Obsidian</div>
-            <div class="material-sub">Deep Black Glass</div>
+          <div class="theme-tile" id="preset-obsidian" onclick="selectPreset('obsidian', this)">
+            <div class="theme-tile-badge" style="background:#08080C;"></div>
+            <span class="theme-tile-name">Pure Obsidian</span>
           </div>
-          <div class="material-tile" id="mat-titanium" onclick="selectMaterial('frosted', this, '#1E2028')">
-            <div class="material-title">Frosted Titanium</div>
-            <div class="material-sub">Dark Translucent Glass</div>
+          <div class="theme-tile" id="preset-titanium" onclick="selectPreset('titanium', this)">
+            <div class="theme-tile-badge" style="background:#181A22;"></div>
+            <span class="theme-tile-name">Titanium</span>
+          </div>
+          <div class="theme-tile" id="preset-midnight" onclick="selectPreset('midnight', this)">
+            <div class="theme-tile-badge" style="background:linear-gradient(135deg, #0A1628, #050912);"></div>
+            <span class="theme-tile-name">Midnight Ocean</span>
+          </div>
+          <div class="theme-tile" id="preset-emerald" onclick="selectPreset('emerald', this)">
+            <div class="theme-tile-badge" style="background:linear-gradient(135deg, #081C15, #040B09);"></div>
+            <span class="theme-tile-name">Emerald Forest</span>
+          </div>
+          <div class="theme-tile" id="preset-ember" onclick="selectPreset('ember', this)">
+            <div class="theme-tile-badge" style="background:linear-gradient(135deg, #231116, #0B0709);"></div>
+            <span class="theme-tile-name">Sunset Ember</span>
+          </div>
+          <div class="theme-tile" id="preset-violet" onclick="selectPreset('violet', this)">
+            <div class="theme-tile-badge" style="background:linear-gradient(135deg, #1A102B, #08060E);"></div>
+            <span class="theme-tile-name">Violet Dusk</span>
+          </div>
+          <div class="theme-tile" id="preset-slate" onclick="selectPreset('slate', this)">
+            <div class="theme-tile-badge" style="background:linear-gradient(135deg, #222530, #101218);"></div>
+            <span class="theme-tile-name">Frosted Slate</span>
           </div>
         </div>
       </div>
 
-      <div class="section-eyebrow">SOLID COLORS PALETTE</div>
+      <div class="section-eyebrow">CUSTOM FINISH (SOLID & DUAL GRADIENT)</div>
       <div class="glass-card">
-        <div class="swatch-palette">
-          <div class="swatch-btn" style="background:#08080C;" onclick="selectColor('#08080C')">
-            <div class="dot-preview" style="background:#08080C;"></div>
-            <span>Obsidian Black</span>
-          </div>
-          <div class="swatch-btn" style="background:#0E1428;" onclick="selectColor('#0E1428')">
-            <div class="dot-preview" style="background:#193060;"></div>
-            <span>Midnight Blue</span>
-          </div>
-          <div class="swatch-btn" style="background:#1E2028;" onclick="selectColor('#1E2028')">
-            <div class="dot-preview" style="background:#323644;"></div>
-            <span>Space Gray</span>
-          </div>
-          <div class="swatch-btn" style="background:#0A2818;" onclick="selectColor('#0A2818')">
-            <div class="dot-preview" style="background:#145232;"></div>
-            <span>Deep Emerald</span>
-          </div>
-          <div class="swatch-btn" style="background:#240E38;" onclick="selectColor('#240E38')">
-            <div class="dot-preview" style="background:#4A1C74;"></div>
-            <span>Royal Amethyst</span>
-          </div>
-          <div class="swatch-btn" style="background:#2C303E;" onclick="selectColor('#2C303E')">
-            <div class="dot-preview" style="background:#484F66;"></div>
-            <span>Slate Titanium</span>
+        <div style="font-size:11.5px; font-weight:600; color:var(--text-secondary); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.04em;">Solid Swatches</div>
+        <div class="clock-accent-row" style="margin-bottom:14px;">
+          <div class="clock-accent-btn" style="background:#08080C; border:1px solid rgba(255,255,255,0.22);" onclick="selectSolidColor('#08080C')"></div>
+          <div class="clock-accent-btn" style="background:#11131A; border:1px solid rgba(255,255,255,0.22);" onclick="selectSolidColor('#11131A')"></div>
+          <div class="clock-accent-btn" style="background:#181A22; border:1px solid rgba(255,255,255,0.22);" onclick="selectSolidColor('#181A22')"></div>
+          <div class="clock-accent-btn" style="background:#1A1423; border:1px solid rgba(255,255,255,0.22);" onclick="selectSolidColor('#1A1423')"></div>
+          <div class="clock-accent-btn" style="background:#0D1A18; border:1px solid rgba(255,255,255,0.22);" onclick="selectSolidColor('#0D1A18')"></div>
+          <div class="clock-accent-btn" style="background:#1F1418; border:1px solid rgba(255,255,255,0.22);" onclick="selectSolidColor('#1F1418')"></div>
+          <div style="display:flex; align-items:center; gap:8px; margin-left:6px;">
+            <input type="color" id="solidColorPicker" value="#08080C" onchange="selectSolidColor(this.value)" class="color-chip-input">
+            <span style="font-size:12px; color:var(--text-secondary);">Solid...</span>
           </div>
         </div>
 
-        <div style="display:flex; align-items:center; gap:12px; margin-top:10px;">
-          <input type="color" id="customColorPicker" value="#08080C" onchange="selectColor(this.value)" style="width:40px; height:40px; border-radius:10px; border:1px solid var(--border-glass); background:none; cursor:pointer;">
-          <span style="font-size:12.5px; color:var(--text-secondary);">Pick custom desktop color...</span>
+        <div class="gradient-editor-row">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="color" id="gradStop1" value="#0A1628" oninput="updateGradientPreview()" class="color-chip-input">
+            <span style="font-size:11.5px; color:var(--text-secondary);">Stop 1</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="color" id="gradStop2" value="#050912" oninput="updateGradientPreview()" class="color-chip-input">
+            <span style="font-size:11.5px; color:var(--text-secondary);">Stop 2</span>
+          </div>
+          <div class="gradient-preview-bar" id="gradientPreviewBar" style="background:linear-gradient(90deg, #0A1628, #050912);"></div>
+          <button class="btn-ghost" style="padding:7px 14px; font-size:12px;" onclick="applyCustomGradient()">Apply Gradient</button>
         </div>
       </div>
 
-      <div class="section-eyebrow">AMBIENT GLOW INTENSITY</div>
+      <div class="section-eyebrow">CLOCK MINUTE ACCENT</div>
+      <div class="glass-card">
+        <div class="clock-accent-row">
+          <button class="clock-auto-btn active" id="clk-auto" onclick="selectClockAccent('auto', this)">Auto</button>
+          <div class="clock-accent-btn" id="clk-FF9F0A" style="background:#FF9F0A;" onclick="selectClockAccent('#FF9F0A', this)"></div>
+          <div class="clock-accent-btn" id="clk-34C759" style="background:#34C759;" onclick="selectClockAccent('#34C759', this)"></div>
+          <div class="clock-accent-btn" id="clk-0A84FF" style="background:#0A84FF;" onclick="selectClockAccent('#0A84FF', this)"></div>
+          <div class="clock-accent-btn" id="clk-BF5AF2" style="background:#BF5AF2;" onclick="selectClockAccent('#BF5AF2', this)"></div>
+          <div class="clock-accent-btn" id="clk-FF375F" style="background:#FF375F;" onclick="selectClockAccent('#FF375F', this)"></div>
+          <div class="clock-accent-btn" id="clk-FFFFFF" style="background:#FFFFFF;" onclick="selectClockAccent('#FFFFFF', this)"></div>
+        </div>
+      </div>
+
+      <div class="section-eyebrow">GLOW & EDGE RIM</div>
       <div class="glass-card">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-          <span style="font-weight:600; font-size:13px;">Glow Strength</span>
-          <span style="font-weight:700; color:#FF43A8; font-size:13px;" id="glowValText">25%</span>
+          <div>
+            <div style="font-weight:600; font-size:13px;">Reactive Album & Edge Glow</div>
+            <div style="font-size:11.5px; color:var(--text-secondary);">Controls how strongly colors illuminate the island surface.</div>
+          </div>
+          <span style="font-weight:700; color:#FF43A8; font-size:13.5px;" id="glowValText">24%</span>
         </div>
-        <input type="range" min="0" max="50" value="25" id="glowSlider" oninput="updateGlow(this.value)" style="width:100%; accent-color:#FF43A8; cursor:pointer;">
+        <input type="range" min="0" max="100" value="24" id="glowSlider" oninput="updateGlow(this.value)" style="width:100%; accent-color:#FF43A8; cursor:pointer; margin-bottom:16px;">
+
+        <div class="setting-row" style="margin-bottom:0;">
+          <div class="row-info">
+            <span class="row-title">Specular Rim Highlight</span>
+            <span class="row-desc">Displays a subtle luminous hairline along the screen bezel edge.</span>
+          </div>
+          <div class="switch-toggle active" id="toggleBorder" onclick="toggleSetting('show_border')"></div>
+        </div>
       </div>
     </section>
 
@@ -1422,44 +1589,252 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
     }
   }
 
-  async function selectMaterial(mode, el, color) {
-    document.querySelectorAll('.material-tile').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
+  // ── Preset Color Definitions ─────────────────────────
+  const PRESET_MAP = {
+    'ambient':  { mode: 'ambient',  bg: '#08080C', glow: 'rgba(255, 67, 168, 0.35)', border: 'rgba(255, 255, 255, 0.16)' },
+    'obsidian': { mode: 'solid',    bg: '#08080C', glow: 'rgba(0, 0, 0, 0.8)',        border: 'rgba(255, 255, 255, 0.12)' },
+    'titanium': { mode: 'solid',    bg: '#181A22', glow: 'rgba(24, 26, 34, 0.6)',     border: 'rgba(255, 255, 255, 0.22)' },
+    'midnight': { mode: 'gradient', bg: 'linear-gradient(90deg, #0A1628, #050912)', glow: 'rgba(10, 22, 40, 0.65)', border: 'rgba(30, 60, 110, 0.35)' },
+    'emerald':  { mode: 'gradient', bg: 'linear-gradient(90deg, #081C15, #040B09)', glow: 'rgba(8, 28, 21, 0.65)', border: 'rgba(16, 185, 129, 0.35)' },
+    'ember':    { mode: 'gradient', bg: 'linear-gradient(90deg, #231116, #0B0709)', glow: 'rgba(35, 17, 22, 0.65)', border: 'rgba(244, 63, 94, 0.35)' },
+    'violet':   { mode: 'gradient', bg: 'linear-gradient(90deg, #1A102B, #08060E)', glow: 'rgba(26, 16, 43, 0.65)', border: 'rgba(168, 85, 247, 0.35)' },
+    'slate':    { mode: 'gradient', bg: 'linear-gradient(90deg, #222530, #101218)', glow: 'rgba(34, 37, 48, 0.65)', border: 'rgba(148, 163, 184, 0.30)' }
+  };
+
+  let currentSettings = {};
+
+  async function loadSettings() {
     try {
-      let url = '/api/theme?mode=' + encodeURIComponent(mode);
-      if (color) url += '&color=' + encodeURIComponent(color);
-      await fetch(url, { method: 'POST' });
-      showToast('Material updated: ' + mode);
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.settings) {
+          currentSettings = json.settings;
+          applySettingsToUI(currentSettings);
+        }
+      }
+    } catch(e) {
+      console.warn('Could not fetch initial settings:', e);
+    }
+  }
+
+  function setSwitch(id, isActive) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('active', !!isActive);
+  }
+
+  function applySettingsToUI(cfg) {
+    // 1. Toggles
+    setSwitch('toggleAutoHide', !!cfg.auto_hide);
+    setSwitch('toggleHover', cfg.hover_to_expand !== false);
+    setSwitch('toggleAutostart', cfg.autostart !== false);
+    setSwitch('toggle24H', cfg.time_format === '24h' || cfg.time_format === true);
+    setSwitch('toggleBorder', cfg.show_border !== false);
+
+    // 2. Glow
+    const op = cfg.ambient_opacity !== undefined ? Math.round(cfg.ambient_opacity * 100) : 24;
+    const slider = document.getElementById('glowSlider');
+    const lbl = document.getElementById('glowValText');
+    if (slider) slider.value = op;
+    if (lbl) lbl.textContent = op + '%';
+
+    // 3. Preset
+    const preset = cfg.theme_preset || (cfg.theme_mode === 'ambient' ? 'ambient' : null);
+    if (preset) {
+      document.querySelectorAll('.theme-tile').forEach(t => t.classList.remove('active'));
+      const el = document.getElementById('preset-' + preset);
+      if (el) el.classList.add('active');
+    }
+
+    // 4. Clock Accent
+    const clk = cfg.clock_accent || 'auto';
+    updateClockAccentUI(clk);
+
+    // 5. Gradients & Solids
+    if (cfg.gradient_c1) document.getElementById('gradStop1').value = cfg.gradient_c1;
+    if (cfg.gradient_c2) document.getElementById('gradStop2').value = cfg.gradient_c2;
+    updateGradientPreview();
+
+    if (cfg.solid_color) document.getElementById('solidColorPicker').value = cfg.solid_color;
+
+    // 6. Docking
+    if (cfg.dock_edge) {
+      document.querySelectorAll('.dock-cell').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.dock-cell').forEach(c => {
+        if (c.getAttribute('onclick') && c.getAttribute('onclick').includes("'" + cfg.dock_edge + "'")) {
+          c.classList.add('active');
+        }
+      });
+    }
+
+    updatePreviewSurface(cfg);
+  }
+
+  function updateClockAccentUI(accent) {
+    document.querySelectorAll('.clock-accent-btn, .clock-auto-btn').forEach(b => b.classList.remove('active'));
+    if (accent === 'auto') {
+      const b = document.getElementById('clk-auto');
+      if (b) b.classList.add('active');
+    } else {
+      const clean = accent.replace('#', '').toUpperCase();
+      const b = document.getElementById('clk-' + clean);
+      if (b) b.classList.add('active');
+    }
+    const minuteEl = document.getElementById('previewMinuteAccent');
+    if (minuteEl) {
+      minuteEl.style.color = (accent === 'auto') ? '#FFFFFF' : accent;
+    }
+  }
+
+  function updatePreviewSurface(cfg) {
+    const pill = document.getElementById('appearancePill');
+    const stage = document.getElementById('appearanceStage');
+    if (!pill) return;
+
+    const preset = cfg.theme_preset || cfg.theme_mode || 'ambient';
+    if (PRESET_MAP[preset]) {
+      const p = PRESET_MAP[preset];
+      pill.style.background = p.bg;
+      pill.style.boxShadow = `0 8px 24px rgba(0, 0, 0, 0.8), 0 0 20px ${p.glow}`;
+    } else if (cfg.theme_mode === 'gradient' && cfg.gradient_c1 && cfg.gradient_c2) {
+      pill.style.background = `linear-gradient(90deg, ${cfg.gradient_c1}, ${cfg.gradient_c2})`;
+      pill.style.boxShadow = `0 8px 24px rgba(0, 0, 0, 0.8)`;
+    } else if (cfg.solid_color) {
+      pill.style.background = cfg.solid_color;
+      pill.style.boxShadow = `0 8px 24px rgba(0, 0, 0, 0.8)`;
+    }
+
+    if (cfg.show_border === false) {
+      pill.style.border = 'none';
+    } else {
+      pill.style.border = '1.5px solid rgba(255, 255, 255, 0.16)';
+    }
+
+    if (stage && cfg.ambient_opacity !== undefined) {
+      stage.style.background = `radial-gradient(circle at 50% 30%, rgba(255, 67, 168, ${cfg.ambient_opacity}), rgba(0, 0, 0, 0.6) 70%)`;
+    }
+  }
+
+  async function toggleSetting(key) {
+    const map = {
+      'auto_hide': 'toggleAutoHide',
+      'hover_to_expand': 'toggleHover',
+      'autostart': 'toggleAutostart',
+      'time_format': 'toggle24H',
+      'show_border': 'toggleBorder'
+    };
+    const elId = map[key];
+    const el = document.getElementById(elId);
+    if (!el) return;
+
+    let newVal;
+    if (key === 'time_format') {
+      const is24H = el.classList.contains('active');
+      newVal = is24H ? '12h' : '24h';
+      el.classList.toggle('active', !is24H);
+    } else {
+      newVal = !el.classList.contains('active');
+      el.classList.toggle('active', newVal);
+    }
+
+    currentSettings[key] = newVal;
+
+    if (key === 'show_border') {
+      const pill = document.getElementById('appearancePill');
+      if (pill) pill.style.border = newVal ? '1.5px solid rgba(255, 255, 255, 0.16)' : 'none';
+    }
+
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: newVal })
+      });
+      showToast('Updated ' + key.replace('_', ' '));
+    } catch(e) {
+      showToast('Setting synced locally');
+    }
+  }
+
+  async function selectPreset(presetKey, el) {
+    document.querySelectorAll('.theme-tile').forEach(t => t.classList.remove('active'));
+    if (el) el.classList.add('active');
+
+    currentSettings.theme_preset = presetKey;
+    currentSettings.theme_mode = (presetKey === 'ambient') ? 'ambient' : (PRESET_MAP[presetKey] ? PRESET_MAP[presetKey].mode : 'solid');
+    updatePreviewSurface(currentSettings);
+
+    try {
+      await fetch('/api/theme?preset=' + encodeURIComponent(presetKey), { method: 'POST' });
+      showToast('Applied preset: ' + presetKey.toUpperCase());
+    } catch(e) {
+      showToast('Preset applied');
+    }
+  }
+
+  async function selectSolidColor(color) {
+    document.querySelectorAll('.theme-tile').forEach(t => t.classList.remove('active'));
+    currentSettings.theme_preset = 'solid';
+    currentSettings.theme_mode = 'solid';
+    currentSettings.solid_color = color;
+    updatePreviewSurface(currentSettings);
+
+    const picker = document.getElementById('solidColorPicker');
+    if (picker) picker.value = color;
+
+    try {
+      await fetch('/api/theme?mode=solid&color=' + encodeURIComponent(color), { method: 'POST' });
+      showToast('Solid finish updated');
     } catch(e) {}
   }
 
-  async function selectColor(color) {
+  function updateGradientPreview() {
+    const c1 = document.getElementById('gradStop1').value;
+    const c2 = document.getElementById('gradStop2').value;
+    const bar = document.getElementById('gradientPreviewBar');
+    if (bar) bar.style.background = `linear-gradient(90deg, ${c1}, ${c2})`;
+  }
+
+  async function applyCustomGradient() {
+    document.querySelectorAll('.theme-tile').forEach(t => t.classList.remove('active'));
+    const c1 = document.getElementById('gradStop1').value;
+    const c2 = document.getElementById('gradStop2').value;
+
+    currentSettings.theme_preset = 'custom';
+    currentSettings.theme_mode = 'gradient';
+    currentSettings.gradient_c1 = c1;
+    currentSettings.gradient_c2 = c2;
+    updatePreviewSurface(currentSettings);
+
     try {
-      await fetch('/api/theme?mode=solid&color=' + encodeURIComponent(color), { method: 'POST' });
-      showToast('Accent color updated');
-      const pill = document.getElementById('appearancePill');
-      if (pill) pill.style.borderColor = color;
+      await fetch(`/api/theme?mode=gradient&gradient_c1=${encodeURIComponent(c1)}&gradient_c2=${encodeURIComponent(c2)}`, { method: 'POST' });
+      showToast('Custom dual gradient applied');
+    } catch(e) {}
+  }
+
+  async function selectClockAccent(accent, el) {
+    currentSettings.clock_accent = accent;
+    updateClockAccentUI(accent);
+
+    try {
+      await fetch('/api/theme?clock_accent=' + encodeURIComponent(accent), { method: 'POST' });
+      showToast('Clock minute accent updated');
     } catch(e) {}
   }
 
   async function updateGlow(val) {
     document.getElementById('glowValText').textContent = val + '%';
     const stage = document.getElementById('appearanceStage');
+    const op = (val / 100).toFixed(2);
     if (stage) {
-      const alpha = (val / 100).toFixed(2);
-      stage.style.background = 'radial-gradient(circle at 50% 30%, rgba(255, 67, 168, ' + alpha + '), rgba(0, 0, 0, 0.6) 70%)';
+      stage.style.background = `radial-gradient(circle at 50% 30%, rgba(255, 67, 168, ${op}), rgba(0, 0, 0, 0.6) 70%)`;
     }
+    currentSettings.ambient_opacity = parseFloat(op);
+
     try {
-      const op = (val / 100).toFixed(2);
       await fetch('/api/theme?opacity=' + op, { method: 'POST' });
     } catch(e) {}
-  }
-
-  function toggleSwitch(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.classList.toggle('active');
-    showToast('Preference updated');
   }
 
   async function sendPreset(app, title, msg) {
@@ -1499,13 +1874,29 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
   // Update clock in preview
   function updateClock() {
     const now = new Date();
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
+    const is24H = currentSettings.time_format !== '12h';
+    let h = now.getHours();
+    if (!is24H) {
+      h = h % 12 || 12;
+    }
+    const hh = String(h).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+
     const el = document.getElementById('previewClock');
-    if (el) el.textContent = `${h}:${m}`;
+    if (el) el.textContent = `${hh}:${mm}`;
+
+    const appClock = document.getElementById('previewClockAppearance');
+    if (appClock) {
+      const accent = currentSettings.clock_accent || 'auto';
+      const col = (accent === 'auto') ? '#FFFFFF' : accent;
+      appClock.innerHTML = `${hh}:<span id="previewMinuteAccent" style="color:${col}; font-weight:700;">${mm}</span>`;
+    }
   }
+
   setInterval(updateClock, 1000);
   updateClock();
+  document.addEventListener('DOMContentLoaded', loadSettings);
+  loadSettings();
 </script>
 </body>
 </html>

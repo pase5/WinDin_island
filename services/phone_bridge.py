@@ -17,6 +17,7 @@ from typing import Optional
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from services.web_companion import WEB_COMPANION_HTML
+from services.settings_service import settings
 
 MOBILE_COMPANION_HTML = WEB_COMPANION_HTML
 
@@ -79,6 +80,19 @@ class PhoneBridgeHandler(BaseHTTPRequestHandler):
                 "version": "2.0.0",
                 "ip": get_local_ip(),
                 "port": 54321
+            }).encode("utf-8")
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
+        elif path in ("/api/settings", "/settings"):
+            res = json.dumps({
+                "status": "ok",
+                "settings": settings.load()
             }).encode("utf-8")
 
             self.send_response(200)
@@ -262,14 +276,39 @@ class PhoneBridgeHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
 
-            theme_data = {
-                "mode": query.get("mode", [body_data.get("mode", "ambient")])[0],
-                "color": query.get("color", [body_data.get("color", "#08080C")])[0],
-                "opacity": query.get("opacity", [body_data.get("opacity", "0.25")])[0]
-            }
+            theme_data = dict(body_data)
+            for k in ("preset", "mode", "color", "gradient_c1", "gradient_c2", "c1", "c2", "clock_accent", "show_border", "opacity", "ambient_opacity"):
+                if k in query:
+                    theme_data[k] = query[k][0]
+
             if self.server_ref:
                 self.server_ref.theme_requested.emit(theme_data)
             res = json.dumps({"status": "ok", "theme": theme_data}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
+        elif path in ("/api/settings", "/settings"):
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_data = {}
+            if content_length > 0:
+                try:
+                    body_data = json.loads(self.rfile.read(content_length).decode("utf-8"))
+                except Exception:
+                    pass
+
+            query = parse_qs(urlparse(self.path).query)
+            for k, v in query.items():
+                if k not in body_data and v:
+                    body_data[k] = v[0]
+
+            if self.server_ref and body_data:
+                self.server_ref.settings_requested.emit(body_data)
+
+            res = json.dumps({"status": "ok", "settings": settings.load()}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(res)))
@@ -332,6 +371,7 @@ class PhoneBridgeService(QObject):
     dock_requested = pyqtSignal(str)
     simulate_requested = pyqtSignal(str)
     theme_requested = pyqtSignal(dict)
+    settings_requested = pyqtSignal(dict)
 
     def __init__(self, port: int = 54321, parent=None):
         super().__init__(parent)
