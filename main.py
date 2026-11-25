@@ -27,7 +27,7 @@ from PyQt6.QtGui import (
 # If the app is already running, notify the active instance to
 # reveal & expand the Dynamic Island immediately, then exit.
 # -------------------------------------------------------------
-MUTEX_NAME = "Local\\WinDinDynamicIsland_SingleInstanceMutex"
+MUTEX_NAME = "Local\\WindowLand_DynamicIsland_SingleInstance_Mutex"
 _kernel32 = ctypes.windll.kernel32
 _user32 = ctypes.windll.user32
 WM_SHOW_DYNAMIC_ISLAND = _user32.RegisterWindowMessageW("WinDin_ShowDynamicIsland")
@@ -544,6 +544,7 @@ def main():
         os._exit(0)
 
     act_quit.triggered.connect(on_quit)
+    phone_service.quit_requested.connect(on_quit)
     tray_menu.addAction(act_quit)
 
     tray_icon.setContextMenu(tray_menu)

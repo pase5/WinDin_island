@@ -121,6 +121,17 @@ class PhoneBridgeHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(res)
 
+        elif path in ("/api/quit", "/quit"):
+            if self.server_ref:
+                self.server_ref.quit_requested.emit()
+            res = json.dumps({"status": "ok", "action": "quit"}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
         elif path.startswith("/api/dock"):
             query = parse_qs(urlparse(self.path).query)
             edge = query.get("edge", ["top"])[0]
@@ -197,6 +208,17 @@ class PhoneBridgeHandler(BaseHTTPRequestHandler):
             if self.server_ref:
                 self.server_ref.open_settings_requested.emit()
             res = json.dumps({"status": "ok", "action": "open_settings"}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(res)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(res)
+
+        elif path in ("/api/quit", "/quit"):
+            if self.server_ref:
+                self.server_ref.quit_requested.emit()
+            res = json.dumps({"status": "ok", "action": "quit"}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(res)))
@@ -306,6 +328,7 @@ class PhoneBridgeService(QObject):
     wake_requested = pyqtSignal()
     toggle_requested = pyqtSignal()
     open_settings_requested = pyqtSignal()
+    quit_requested = pyqtSignal()
     dock_requested = pyqtSignal(str)
     simulate_requested = pyqtSignal(str)
     theme_requested = pyqtSignal(dict)

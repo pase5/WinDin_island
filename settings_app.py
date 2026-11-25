@@ -11,7 +11,12 @@ import urllib.request
 import json
 import ctypes
 
-MUTEX_NAME = "Global\\WinDinDynamicIsland_SingleInstanceMutex"
+MUTEX_NAMES = [
+    "Local\\WindowLand_DynamicIsland_SingleInstance_Mutex",
+    "Local\\WinDinDynamicIsland_SingleInstanceMutex",
+    "Global\\WindowLand_DynamicIsland_SingleInstance_Mutex",
+    "Global\\WinDinDynamicIsland_SingleInstanceMutex",
+]
 
 
 def is_island_running() -> bool:
@@ -25,15 +30,16 @@ def is_island_running() -> bool:
     except Exception:
         pass
 
-    # 2. Check Named Mutex
-    try:
-        kernel32 = ctypes.windll.kernel32
-        h_mutex = kernel32.OpenMutexW(0x00100000, False, MUTEX_NAME)
-        if h_mutex:
-            kernel32.CloseHandle(h_mutex)
-            return True
-    except Exception:
-        pass
+    # 2. Check Named Mutexes
+    kernel32 = ctypes.windll.kernel32
+    for mname in MUTEX_NAMES:
+        try:
+            h_mutex = kernel32.OpenMutexW(0x00100000, False, mname)
+            if h_mutex:
+                kernel32.CloseHandle(h_mutex)
+                return True
+        except Exception:
+            pass
 
     return False
 

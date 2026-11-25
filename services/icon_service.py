@@ -680,3 +680,377 @@ def get_app_icon(
     fallback = render_uniform_notification_icon(size=target_size, accent_col=accent_color, solid_col=solid_color)
     _APP_ICON_CACHE[cache_key] = fallback
     return fallback
+
+
+# ── Vector UI Icon Rendering Engine (AGENTS.md Rule 1 & DESIGN.md) ──
+_UI_ICON_CACHE: Dict[str, QPixmap] = {}
+
+
+def render_vector_ui_icon(
+    name: str,
+    size: int = 24,
+    color: Optional[QColor] = None,
+    stroke_width: float = 1.6
+) -> QPixmap:
+    """
+    Renders pure mathematical vector UI icons with subpixel antialiasing.
+    Strictly follows AGENTS.md (Rule 1: Zero System Emojis) and DESIGN.md (precision geometry).
+    Results are cached in memory for zero-latency UI rendering.
+    """
+    if color is None:
+        color = QColor("#E4E1EA")
+
+    key = f"{name.lower()}_{size}_{color.name()}_{color.alpha()}_{stroke_width}"
+    if key in _UI_ICON_CACHE:
+        return _UI_ICON_CACHE[key]
+
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
+    s = float(size)
+    cx = s / 2.0
+    cy = s / 2.0
+    pen = QPen(color, stroke_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+
+    n = name.lower().strip()
+
+    try:
+        if n in ("tune", "general"):
+            # Horizontal slider rails with knurled indicator beads
+            p.drawLine(QPointF(s * 0.18, s * 0.35), QPointF(s * 0.82, s * 0.35))
+            p.drawLine(QPointF(s * 0.18, s * 0.65), QPointF(s * 0.82, s * 0.65))
+            p.setBrush(QBrush(color))
+            p.drawRoundedRect(QRectF(s * 0.32, s * 0.23, s * 0.16, s * 0.24), s * 0.04, s * 0.04)
+            p.drawRoundedRect(QRectF(s * 0.52, s * 0.53, s * 0.16, s * 0.24), s * 0.04, s * 0.04)
+
+        elif n in ("palette", "appearance"):
+            # Artist palette squircle outline with thumb opening and pigment wells
+            path = QPainterPath()
+            path.moveTo(s * 0.5, s * 0.15)
+            path.cubicTo(s * 0.85, s * 0.15, s * 0.88, s * 0.50, s * 0.80, s * 0.70)
+            path.cubicTo(s * 0.75, s * 0.82, s * 0.60, s * 0.85, s * 0.50, s * 0.85)
+            path.cubicTo(s * 0.38, s * 0.85, s * 0.35, s * 0.75, s * 0.30, s * 0.75)
+            path.cubicTo(s * 0.25, s * 0.75, s * 0.20, s * 0.82, s * 0.15, s * 0.70)
+            path.cubicTo(s * 0.10, s * 0.50, s * 0.15, s * 0.15, s * 0.5, s * 0.15)
+            p.drawPath(path)
+            # Pigment dab dots
+            p.setBrush(QBrush(color))
+            p.drawEllipse(QPointF(s * 0.40, s * 0.32), s * 0.05, s * 0.05)
+            p.drawEllipse(QPointF(s * 0.60, s * 0.34), s * 0.05, s * 0.05)
+            p.drawEllipse(QPointF(s * 0.70, s * 0.52), s * 0.05, s * 0.05)
+
+        elif n in ("dock", "position"):
+            # Display frame with top dock pill highlight
+            p.drawRoundedRect(QRectF(s * 0.16, s * 0.20, s * 0.68, s * 0.54), s * 0.10, s * 0.10)
+            p.setBrush(QBrush(color))
+            p.drawRoundedRect(QRectF(s * 0.36, s * 0.20, s * 0.28, s * 0.09), s * 0.04, s * 0.04)
+
+        elif n in ("tools", "companion", "extension"):
+            # Smartphone with screen and dynamic notch
+            p.drawRoundedRect(QRectF(s * 0.26, s * 0.14, s * 0.48, s * 0.72), s * 0.10, s * 0.10)
+            p.setBrush(QBrush(color))
+            p.drawRoundedRect(QRectF(s * 0.40, s * 0.20, s * 0.20, s * 0.05), s * 0.025, s * 0.025)
+            p.drawLine(QPointF(s * 0.42, s * 0.78), QPointF(s * 0.58, s * 0.78))
+
+        elif n in ("diagnostics", "monitoring"):
+            # EKG pulse line with monitor bezel
+            p.drawRoundedRect(QRectF(s * 0.14, s * 0.16, s * 0.72, s * 0.68), s * 0.12, s * 0.12)
+            path = QPainterPath()
+            path.moveTo(s * 0.20, s * 0.52)
+            path.lineTo(s * 0.36, s * 0.52)
+            path.lineTo(s * 0.44, s * 0.30)
+            path.lineTo(s * 0.54, s * 0.72)
+            path.lineTo(s * 0.64, s * 0.44)
+            path.lineTo(s * 0.70, s * 0.52)
+            path.lineTo(s * 0.80, s * 0.52)
+            p.drawPath(path)
+
+        elif n in ("info", "about"):
+            # Precision circular "i" information glyph
+            p.drawEllipse(QRectF(s * 0.15, s * 0.15, s * 0.70, s * 0.70))
+            p.setBrush(QBrush(color))
+            p.drawEllipse(QPointF(cx, s * 0.34), s * 0.045, s * 0.045)
+            p.drawLine(QPointF(cx, s * 0.46), QPointF(cx, s * 0.66))
+
+        elif n in ("user", "avatar"):
+            # Head and curved shoulders silhouette
+            p.drawEllipse(QPointF(cx, s * 0.34), s * 0.18, s * 0.18)
+            body = QPainterPath()
+            body.moveTo(s * 0.18, s * 0.78)
+            body.cubicTo(s * 0.22, s * 0.58, s * 0.78, s * 0.58, s * 0.82, s * 0.78)
+            p.drawPath(body)
+
+        elif n in ("ambient", "sun"):
+            # Center sun orb with radiating orbital rays
+            p.drawEllipse(QPointF(cx, cy), s * 0.18, s * 0.18)
+            for angle in (0, 45, 90, 135, 180, 225, 270, 315):
+                p.save()
+                p.translate(cx, cy)
+                p.rotate(angle)
+                p.drawLine(QPointF(s * 0.28, 0), QPointF(s * 0.40, 0))
+                p.restore()
+
+        elif n in ("obsidian", "oled"):
+            # OLED contrast circle: left half filled solid, right half rim
+            p.drawEllipse(QRectF(s * 0.16, s * 0.16, s * 0.68, s * 0.68))
+            half = QPainterPath()
+            half.moveTo(cx, s * 0.16)
+            half.arcTo(QRectF(s * 0.16, s * 0.16, s * 0.68, s * 0.68), 90, 180)
+            half.closeSubpath()
+            p.setBrush(QBrush(color))
+            p.drawPath(half)
+
+        elif n in ("titanium", "frosted"):
+            # Frosted glass quadrant matrix
+            r = QRectF(s * 0.18, s * 0.18, s * 0.64, s * 0.64)
+            p.drawRoundedRect(r, s * 0.12, s * 0.12)
+            p.drawLine(QPointF(cx, s * 0.18), QPointF(cx, s * 0.82))
+            p.drawLine(QPointF(s * 0.18, cy), QPointF(s * 0.82, cy))
+
+        elif n in ("color_picker", "palette_picker"):
+            # Color droplet / selector
+            p.drawEllipse(QRectF(s * 0.16, s * 0.16, s * 0.68, s * 0.68))
+            p.setBrush(QBrush(color))
+            p.drawEllipse(QPointF(cx, cy), s * 0.12, s * 0.12)
+
+        elif n in ("arrow_tl",):
+            p.drawLine(QPointF(s * 0.72, s * 0.72), QPointF(s * 0.28, s * 0.28))
+            p.drawLine(QPointF(s * 0.28, s * 0.54), QPointF(s * 0.28, s * 0.28))
+            p.drawLine(QPointF(s * 0.54, s * 0.28), QPointF(s * 0.28, s * 0.28))
+
+        elif n in ("arrow_top",):
+            p.drawLine(QPointF(cx, s * 0.76), QPointF(cx, s * 0.24))
+            p.drawLine(QPointF(cx - s * 0.20, s * 0.44), QPointF(cx, s * 0.24))
+            p.drawLine(QPointF(cx + s * 0.20, s * 0.44), QPointF(cx, s * 0.24))
+
+        elif n in ("arrow_tr",):
+            p.drawLine(QPointF(s * 0.28, s * 0.72), QPointF(s * 0.72, s * 0.28))
+            p.drawLine(QPointF(s * 0.46, s * 0.28), QPointF(s * 0.72, s * 0.28))
+            p.drawLine(QPointF(s * 0.72, s * 0.54), QPointF(s * 0.72, s * 0.28))
+
+        elif n in ("arrow_left",):
+            p.drawLine(QPointF(s * 0.76, cy), QPointF(s * 0.24, cy))
+            p.drawLine(QPointF(s * 0.44, cy - s * 0.20), QPointF(s * 0.24, cy))
+            p.drawLine(QPointF(s * 0.44, cy + s * 0.20), QPointF(s * 0.24, cy))
+
+        elif n in ("float", "cross"):
+            # 4-way move crosshair
+            p.drawLine(QPointF(cx, s * 0.20), QPointF(cx, s * 0.80))
+            p.drawLine(QPointF(s * 0.20, cy), QPointF(s * 0.80, cy))
+            p.setBrush(QBrush(color))
+            p.drawEllipse(QPointF(cx, cy), s * 0.08, s * 0.08)
+
+        elif n in ("arrow_right",):
+            p.drawLine(QPointF(s * 0.24, cy), QPointF(s * 0.76, cy))
+            p.drawLine(QPointF(s * 0.56, cy - s * 0.20), QPointF(s * 0.76, cy))
+            p.drawLine(QPointF(s * 0.56, cy + s * 0.20), QPointF(s * 0.76, cy))
+
+        elif n in ("arrow_bl",):
+            p.drawLine(QPointF(s * 0.72, s * 0.28), QPointF(s * 0.28, s * 0.72))
+            p.drawLine(QPointF(s * 0.28, s * 0.46), QPointF(s * 0.28, s * 0.72))
+            p.drawLine(QPointF(s * 0.54, s * 0.72), QPointF(s * 0.28, s * 0.72))
+
+        elif n in ("arrow_bottom",):
+            p.drawLine(QPointF(cx, s * 0.24), QPointF(cx, s * 0.76))
+            p.drawLine(QPointF(cx - s * 0.20, s * 0.56), QPointF(cx, s * 0.76))
+            p.drawLine(QPointF(cx + s * 0.20, s * 0.56), QPointF(cx, s * 0.76))
+
+        elif n in ("arrow_br",):
+            p.drawLine(QPointF(s * 0.28, s * 0.28), QPointF(s * 0.72, s * 0.72))
+            p.drawLine(QPointF(s * 0.72, s * 0.46), QPointF(s * 0.72, s * 0.72))
+            p.drawLine(QPointF(s * 0.46, s * 0.72), QPointF(s * 0.72, s * 0.72))
+
+        elif n in ("target", "recenter"):
+            p.drawEllipse(QRectF(s * 0.22, s * 0.22, s * 0.56, s * 0.56))
+            p.drawLine(QPointF(cx, s * 0.12), QPointF(cx, s * 0.24))
+            p.drawLine(QPointF(cx, s * 0.76), QPointF(cx, s * 0.88))
+            p.drawLine(QPointF(s * 0.12, cy), QPointF(s * 0.24, cy))
+            p.drawLine(QPointF(s * 0.76, cy), QPointF(s * 0.88, cy))
+            p.setBrush(QBrush(color))
+            p.drawEllipse(QPointF(cx, cy), s * 0.07, s * 0.07)
+
+        elif n in ("monitor", "display"):
+            p.drawRoundedRect(QRectF(s * 0.15, s * 0.20, s * 0.70, s * 0.46), s * 0.08, s * 0.08)
+            p.drawLine(QPointF(cx, s * 0.66), QPointF(cx, s * 0.78))
+            p.drawLine(QPointF(s * 0.34, s * 0.78), QPointF(s * 0.66, s * 0.78))
+
+        elif n in ("copy",):
+            p.drawRoundedRect(QRectF(s * 0.18, s * 0.28, s * 0.48, s * 0.52), s * 0.08, s * 0.08)
+            bg_doc = QPainterPath()
+            bg_doc.moveTo(s * 0.34, s * 0.28)
+            bg_doc.lineTo(s * 0.34, s * 0.18)
+            bg_doc.lineTo(s * 0.78, s * 0.18)
+            bg_doc.lineTo(s * 0.78, s * 0.62)
+            bg_doc.lineTo(s * 0.66, s * 0.62)
+            p.drawPath(bg_doc)
+
+        elif n in ("external_link",):
+            path = QPainterPath()
+            path.moveTo(s * 0.48, s * 0.22)
+            path.lineTo(s * 0.22, s * 0.22)
+            path.lineTo(s * 0.22, s * 0.78)
+            path.lineTo(s * 0.78, s * 0.78)
+            path.lineTo(s * 0.78, s * 0.52)
+            p.drawPath(path)
+            p.drawLine(QPointF(s * 0.45, s * 0.55), QPointF(s * 0.78, s * 0.22))
+            p.drawLine(QPointF(s * 0.58, s * 0.22), QPointF(s * 0.78, s * 0.22))
+            p.drawLine(QPointF(s * 0.78, s * 0.42), QPointF(s * 0.78, s * 0.22))
+
+        elif n in ("screenshot",):
+            p.drawRoundedRect(QRectF(s * 0.16, s * 0.26, s * 0.68, s * 0.50), s * 0.08, s * 0.08)
+            p.drawRoundedRect(QRectF(s * 0.36, s * 0.18, s * 0.28, s * 0.10), s * 0.04, s * 0.04)
+            p.drawEllipse(QRectF(s * 0.38, s * 0.38, s * 0.24, s * 0.24))
+
+        elif n in ("volume",):
+            # Speaker horn
+            horn = QPainterPath()
+            horn.moveTo(s * 0.20, s * 0.38)
+            horn.lineTo(s * 0.34, s * 0.38)
+            horn.lineTo(s * 0.50, s * 0.24)
+            horn.lineTo(s * 0.50, s * 0.76)
+            horn.lineTo(s * 0.34, s * 0.62)
+            horn.lineTo(s * 0.20, s * 0.62)
+            horn.closeSubpath()
+            p.drawPath(horn)
+            # Sound waves
+            w1 = QPainterPath()
+            w1.arcMoveTo(QRectF(s * 0.44, s * 0.34, s * 0.24, s * 0.32), -45)
+            w1.arcTo(QRectF(s * 0.44, s * 0.34, s * 0.24, s * 0.32), -45, 90)
+            p.drawPath(w1)
+            w2 = QPainterPath()
+            w2.arcMoveTo(QRectF(s * 0.48, s * 0.24, s * 0.36, s * 0.52), -45)
+            w2.arcTo(QRectF(s * 0.48, s * 0.24, s * 0.36, s * 0.52), -45, 90)
+            p.drawPath(w2)
+
+        elif n in ("mute",):
+            horn = QPainterPath()
+            horn.moveTo(s * 0.20, s * 0.38)
+            horn.lineTo(s * 0.34, s * 0.38)
+            horn.lineTo(s * 0.50, s * 0.24)
+            horn.lineTo(s * 0.50, s * 0.76)
+            horn.lineTo(s * 0.34, s * 0.62)
+            horn.lineTo(s * 0.20, s * 0.62)
+            horn.closeSubpath()
+            p.drawPath(horn)
+            p.drawLine(QPointF(s * 0.60, s * 0.36), QPointF(s * 0.80, s * 0.64))
+            p.drawLine(QPointF(s * 0.80, s * 0.36), QPointF(s * 0.60, s * 0.64))
+
+        elif n in ("dnd",):
+            p.drawEllipse(QRectF(s * 0.16, s * 0.16, s * 0.68, s * 0.68))
+            p.drawLine(QPointF(s * 0.30, cy), QPointF(s * 0.70, cy))
+
+        elif n in ("phone", "call"):
+            # Clean telephone handset angled at 45 degrees
+            p.save()
+            p.translate(cx, cy)
+            p.rotate(-45)
+            phone = QPainterPath()
+            phone.moveTo(-s * 0.20, -s * 0.30)
+            phone.lineTo(-s * 0.06, -s * 0.30)
+            phone.lineTo(-s * 0.02, -s * 0.16)
+            phone.lineTo(-s * 0.10, -s * 0.08)
+            phone.quadTo(0, 0, s * 0.08, s * 0.10)
+            phone.lineTo(s * 0.16, s * 0.02)
+            phone.lineTo(s * 0.30, s * 0.06)
+            phone.lineTo(s * 0.30, s * 0.20)
+            phone.quadTo(s * 0.25, s * 0.30, s * 0.15, s * 0.30)
+            phone.cubicTo(-s * 0.10, s * 0.30, -s * 0.30, s * 0.10, -s * 0.30, -s * 0.15)
+            phone.quadTo(-s * 0.30, -s * 0.25, -s * 0.20, -s * 0.30)
+            p.drawPath(phone)
+            p.restore()
+
+        elif n in ("otp", "key"):
+            p.drawEllipse(QRectF(s * 0.20, s * 0.22, s * 0.32, s * 0.32))
+            p.drawLine(QPointF(s * 0.44, s * 0.44), QPointF(s * 0.78, s * 0.78))
+            p.drawLine(QPointF(s * 0.78, s * 0.78), QPointF(s * 0.78, s * 0.68))
+            p.drawLine(QPointF(s * 0.66, s * 0.66), QPointF(s * 0.66, s * 0.56))
+
+        elif n in ("folder", "shelf"):
+            f = QPainterPath()
+            f.moveTo(s * 0.18, s * 0.28)
+            f.lineTo(s * 0.40, s * 0.28)
+            f.lineTo(s * 0.48, s * 0.36)
+            f.lineTo(s * 0.82, s * 0.36)
+            f.lineTo(s * 0.82, s * 0.74)
+            f.lineTo(s * 0.18, s * 0.74)
+            f.closeSubpath()
+            p.drawPath(f)
+
+        elif n in ("download",):
+            p.drawLine(QPointF(cx, s * 0.22), QPointF(cx, s * 0.62))
+            p.drawLine(QPointF(cx - s * 0.18, s * 0.46), QPointF(cx, s * 0.62))
+            p.drawLine(QPointF(cx + s * 0.18, s * 0.46), QPointF(cx, s * 0.62))
+            tray = QPainterPath()
+            tray.moveTo(s * 0.20, s * 0.66)
+            tray.lineTo(s * 0.20, s * 0.78)
+            tray.lineTo(s * 0.80, s * 0.78)
+            tray.lineTo(s * 0.80, s * 0.66)
+            p.drawPath(tray)
+
+        elif n in ("bell", "notification", "toast"):
+            paint_uniform_notification_symbol(p, cx, cy, s, accent_col=color, icon_fill=color, with_beacon=False)
+
+        elif n in ("calendar",):
+            p.drawRoundedRect(QRectF(s * 0.18, s * 0.22, s * 0.64, s * 0.60), s * 0.10, s * 0.10)
+            p.drawLine(QPointF(s * 0.18, s * 0.40), QPointF(s * 0.82, s * 0.40))
+            p.drawLine(QPointF(s * 0.34, s * 0.14), QPointF(s * 0.34, s * 0.26))
+            p.drawLine(QPointF(s * 0.66, s * 0.14), QPointF(s * 0.66, s * 0.26))
+            p.setBrush(QBrush(color))
+            p.drawEllipse(QPointF(s * 0.36, s * 0.54), s * 0.04, s * 0.04)
+            p.drawEllipse(QPointF(s * 0.50, s * 0.54), s * 0.04, s * 0.04)
+            p.drawEllipse(QPointF(s * 0.64, s * 0.54), s * 0.04, s * 0.04)
+            p.drawEllipse(QPointF(s * 0.36, s * 0.68), s * 0.04, s * 0.04)
+            p.drawEllipse(QPointF(s * 0.50, s * 0.68), s * 0.04, s * 0.04)
+
+        elif n in ("music", "demo_music"):
+            m = QPainterPath()
+            m.moveTo(s * 0.36, s * 0.66)
+            m.lineTo(s * 0.36, s * 0.26)
+            m.lineTo(s * 0.74, s * 0.18)
+            m.lineTo(s * 0.74, s * 0.58)
+            p.drawPath(m)
+            p.setBrush(QBrush(color))
+            p.drawEllipse(QRectF(s * 0.22, s * 0.60, s * 0.20, s * 0.16))
+            p.drawEllipse(QRectF(s * 0.60, s * 0.52, s * 0.20, s * 0.16))
+
+        elif n in ("headphones", "airpods"):
+            arch = QPainterPath()
+            arch.arcMoveTo(QRectF(s * 0.24, s * 0.22, s * 0.52, s * 0.50), 0)
+            arch.arcTo(QRectF(s * 0.24, s * 0.22, s * 0.52, s * 0.50), 0, 180)
+            p.drawPath(arch)
+            p.setBrush(QBrush(color))
+            p.drawRoundedRect(QRectF(s * 0.20, s * 0.48, s * 0.12, s * 0.28), s * 0.06, s * 0.06)
+            p.drawRoundedRect(QRectF(s * 0.68, s * 0.48, s * 0.12, s * 0.28), s * 0.06, s * 0.06)
+
+        elif n in ("power", "quit"):
+            circle = QPainterPath()
+            circle.arcMoveTo(QRectF(s * 0.20, s * 0.20, s * 0.60, s * 0.60), 60)
+            circle.arcTo(QRectF(s * 0.20, s * 0.20, s * 0.60, s * 0.60), 60, 240)
+            p.drawPath(circle)
+            p.drawLine(QPointF(cx, s * 0.14), QPointF(cx, s * 0.48))
+
+        elif n in ("dot",):
+            p.setBrush(QBrush(color))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawEllipse(QPointF(cx, cy), s * 0.40, s * 0.40)
+
+        else:
+            # Fallback neat concentric squircle marker
+            p.drawRoundedRect(QRectF(s * 0.20, s * 0.20, s * 0.60, s * 0.60), s * 0.16, s * 0.16)
+            p.setBrush(QBrush(color))
+            p.drawEllipse(QPointF(cx, cy), s * 0.10, s * 0.10)
+
+    except Exception:
+        pass
+    finally:
+        p.end()
+
+    _UI_ICON_CACHE[key] = pix
+    return pix
+

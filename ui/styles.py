@@ -84,14 +84,28 @@ NOTCH_RADIUS_TOP = 14.0   # Curvy flaring inverse fillets at top bezel
 NOTCH_RADIUS_BOT = 20.0   # Curvy soft bottom corners
 EXPANDED_RADIUS = 28.0    # Curvy bottom corners in expanded mode
 
-# Base Theme Colors (Apple-Grade Deep Obsidian)
+# Base Theme Colors (DESIGN.md Section 2.1 Core Neutral Palette)
 COLOR_BEZEL = QColor("#000000")
 COLOR_CANVAS = QColor("#08080C")
+COLOR_OBSIDIAN_BASE = QColor("#08080C")
+COLOR_OBSIDIAN_SURFACE = QColor(14, 14, 18, 252)
+COLOR_OBSIDIAN_DEEP = QColor(2, 2, 4, 255)
+COLOR_BEZEL_STROKE = QColor(26, 26, 34, 230)
+COLOR_SPECULAR_HIGH = QColor(255, 255, 255, 61)
+COLOR_SPECULAR_SUBTLE = QColor(255, 255, 255, 20)
+
+# Semantic & Status Colors (DESIGN.md Section 2.3)
+COLOR_STATUS_ACTIVE = QColor("#34C759")       # Emerald Green
+COLOR_STATUS_WARNING = QColor("#FF9500")      # Amber Gold
+COLOR_STATUS_CRITICAL = QColor("#FF3B30")     # Ruby Red
+COLOR_NOTIFICATION_CYAN = QColor("#00C6FF")
+COLOR_NOTIFICATION_VIOLET = QColor("#0072FF")
+
 COLOR_TEXT_PRIMARY = QColor("#FFFFFF")
 COLOR_TEXT_SECONDARY = QColor("#8E8E93")
 COLOR_TEXT_MUTED = QColor("#636366")
 COLOR_ACCENT = QColor("#FFFFFF")
-COLOR_ACCENT_YELLOW = QColor("#FFFFFF")
+COLOR_ACCENT_YELLOW = QColor("#FF9500")
 
 # Dynamic Glow Palettes (Subtle, Restrained Tints)
 GLOW_STATES = {
@@ -108,10 +122,10 @@ GLOW_STATES = {
         "name": "Soft Glass"
     },
     "notification": {
-        "color1": QColor(86, 204, 242),
-        "color2": QColor(47, 128, 237),
+        "color1": QColor(0, 198, 255),
+        "color2": QColor(0, 114, 255),
         "opacity": 0.12,
-        "name": "Cyan"
+        "name": "Cyan Violet"
     },
     "reminders": {
         "color1": QColor(142, 45, 226),
@@ -120,8 +134,8 @@ GLOW_STATES = {
         "name": "Violet"
     },
     "success": {
-        "color1": QColor(56, 239, 125),
-        "color2": QColor(17, 153, 142),
+        "color1": QColor(52, 199, 89),
+        "color2": QColor(40, 160, 70),
         "opacity": 0.12,
         "name": "Emerald"
     }
