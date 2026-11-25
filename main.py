@@ -83,9 +83,11 @@ def _cleanup_temp_residue():
                 if current_mei and os.path.abspath(full_path) == os.path.abspath(current_mei):
                     continue
                 try:
-                    # Clean folders older than 15 minutes or corrupted ones missing base library
+                    # Clean folders older than 15 minutes.
+                    # NEVER delete folders created within the last 5 minutes (300s) to avoid
+                    # interrupting another instance or child process that is currently extracting.
                     age = time.time() - os.path.getmtime(full_path)
-                    if age > 900 or not os.path.exists(os.path.join(full_path, "base_library.zip")):
+                    if age > 900 or (age > 300 and not os.path.exists(os.path.join(full_path, "base_library.zip"))):
                         shutil.rmtree(full_path, ignore_errors=True)
                 except Exception:
                     pass

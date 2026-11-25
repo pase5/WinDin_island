@@ -21,7 +21,7 @@ from typing import Optional, Dict, Any, Tuple
 from PIL import Image, ImageFilter, ImageEnhance
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QProgressBar, QGraphicsOpacityEffect
 )
 from PyQt6.QtCore import (
@@ -1315,7 +1315,7 @@ class DynamicIslandWidget(QWidget):
         self._hover_collapse_timer.stop()
         if self._island_state == "device_popup":
             self._device_dismiss_timer.stop()
-        elif self._island_state == "compact":
+        elif self._island_state == "compact" and getattr(self, "_hover_to_expand", True):
             self._hover_expand_timer.start(100)
         self.update()
         super().enterEvent(event)
@@ -1408,10 +1408,18 @@ class DynamicIslandWidget(QWidget):
             s_geo = screens[screen_idx].geometry()
             self.move(s_geo.center())
 
-        # Restore theme
+        # Restore theme & visual customization
+        self._clock_accent = cfg.get("clock_accent", "auto")
+        self._show_border = bool(cfg.get("show_border", True))
+        self._hover_to_expand = bool(cfg.get("hover_to_expand", True))
+
         theme_mode = cfg.get("theme_mode", "ambient")
         if theme_mode == "ambient":
             self.set_theme_ambient(float(cfg.get("ambient_opacity", 0.24)), auto_save=False)
+        elif theme_mode == "gradient":
+            c1 = QColor(cfg.get("gradient_c1", "#0A1628"))
+            c2 = QColor(cfg.get("gradient_c2", "#050912"))
+            self.set_theme_gradient(c1, c2, auto_save=False)
         elif theme_mode in ("obsidian", "titanium", "solid"):
             col_hex = cfg.get("solid_color", "#08080C")
             self.set_theme_solid(QColor(col_hex), auto_save=False)
@@ -1430,6 +1438,8 @@ class DynamicIslandWidget(QWidget):
             bg_style = getattr(self, "_bg_style", "ambient")
             solid_col = getattr(self, "_solid_color", QColor("#08080C"))
             solid_hex = solid_col.name() if hasattr(solid_col, "name") else "#08080C"
+            g1_col = getattr(self, "_gradient_c1", QColor("#0A1628"))
+            g2_col = getattr(self, "_gradient_c2", QColor("#050912"))
 
             updates = {
                 "dock_edge": getattr(self, "_dock_edge", "top"),
@@ -1437,8 +1447,13 @@ class DynamicIslandWidget(QWidget):
                 "dock_ratio_y": getattr(self, "_dock_ratio_y", 0.5),
                 "screen_index": screen_idx,
                 "auto_hide": getattr(self, "_auto_hide_enabled", False),
+                "hover_to_expand": getattr(self, "_hover_to_expand", True),
+                "show_border": getattr(self, "_show_border", True),
+                "clock_accent": getattr(self, "_clock_accent", "auto"),
                 "theme_mode": bg_style,
                 "solid_color": solid_hex,
+                "gradient_c1": g1_col.name() if hasattr(g1_col, "name") else "#0A1628",
+                "gradient_c2": g2_col.name() if hasattr(g2_col, "name") else "#050912",
                 "ambient_opacity": getattr(self, "_ambient_opacity", 0.24),
             }
             if hasattr(self, "_floating_center") and self._floating_center:
@@ -1653,6 +1668,12 @@ class DynamicIslandWidget(QWidget):
         Returns (col_hr, col_min) for prominent dual-color clock rendering,
         dynamically adapting to the ambient color and active ambient color mode.
         """
+        custom_acc = getattr(self, "_clock_accent", "auto")
+        if custom_acc and custom_acc != "auto":
+            c = QColor(custom_acc)
+            if c.isValid():
+                return QColor("#FFFFFF"), c
+
         ambient_col = self.get_ambient_color()
         h, s, v, _ = ambient_col.getHsv()
 
@@ -3095,7 +3116,7 @@ class DynamicIslandWidget(QWidget):
     def _on_bridge_clipboard_received(self, text: str):
         try:
             if text:
-                app = QApplication.instance()
+                app = QGuiApplication.instance()
                 if app:
                     clip = app.clipboard()
                     clip.setText(text)
@@ -3902,7 +3923,7 @@ class DynamicIslandWidget(QWidget):
         edge = getattr(self, "_dock_edge", "top")
         morph = getattr(self, "_dock_morph", 1.0)
 
-        if edge == "top" and morph > 0.15:
+        if getattr(self, "_show_border", True) and edge == "top" and morph > 0.15:
             r_top = NOTCH_RADIUS_TOP * morph
             meniscus_grad = QLinearGradient(0, 0, w, 0)
             meniscus_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
@@ -3913,7 +3934,7 @@ class DynamicIslandWidget(QWidget):
             painter.setPen(QPen(QBrush(meniscus_grad), 1.0))
             painter.drawLine(QPointF(0, 0.75), QPointF(w, 0.75))
 
-        elif edge == "bottom" and morph > 0.15:
+        elif getattr(self, "_show_border", True) and edge == "bottom" and morph > 0.15:
             r_top = NOTCH_RADIUS_TOP * morph
             meniscus_grad = QLinearGradient(0, h, w, h)
             meniscus_grad.setColorAt(0.0, QColor(255, 255, 255, 0))

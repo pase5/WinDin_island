@@ -426,6 +426,15 @@ class SettingsWindow(QMainWindow):
         lay.addWidget(c1)
 
         c2, c2_lay = self._make_card("Behavior & Startup")
+        self.sw_hover_expand = SwitchToggle(bool(self.cfg.get("hover_to_expand", True)))
+        self.sw_hover_expand.toggled.connect(self._on_hover_expand_toggled)
+        c2_lay.addWidget(self._make_row(
+            "Hover to Expand",
+            "Automatically expand the island when your cursor rests on it.",
+            self.sw_hover_expand
+        ))
+        c2_lay.addWidget(self._make_divider())
+
         self.sw_autohide = SwitchToggle(bool(self.cfg.get("auto_hide", False)))
         self.sw_autohide.toggled.connect(self._on_autohide_toggled)
         c2_lay.addWidget(self._make_row(
@@ -468,17 +477,28 @@ class SettingsWindow(QMainWindow):
         return page
 
     # ── Page 2: Appearance ────────────────────────────────────────
-    def _build_appearance_page(self) -> QWidget:
-        page, lay = self._make_page("Appearance", "Customize surface material, color, and ambient glow.")
+    THEME_PRESETS = [
+        ("ambient", "Ambient Reactive", "ambient", "#08080C", "#08080C"),
+        ("obsidian", "Pure Obsidian", "solid", "#08080C", "#08080C"),
+        ("titanium", "Titanium", "solid", "#181A22", "#181A22"),
+        ("midnight", "Midnight Ocean", "gradient", "#0A1628", "#050912"),
+        ("emerald", "Emerald Forest", "gradient", "#081C15", "#040B09"),
+        ("ember", "Sunset Ember", "gradient", "#231116", "#0B0709"),
+        ("violet", "Violet Dusk", "gradient", "#1A102B", "#08060E"),
+        ("slate", "Frosted Slate", "gradient", "#222530", "#101218"),
+    ]
 
-        c1, c1_lay = self._make_card("Surface Style")
-        seg_row = QHBoxLayout()
-        seg_row.setSpacing(8)
+    def _build_appearance_page(self) -> QWidget:
+        page, lay = self._make_page("Appearance", "Customize surface presets, custom colors, clock accent, and glow.")
+
+        c1, c1_lay = self._make_card("Theme Presets")
+        preset_grid = QGridLayout()
+        preset_grid.setSpacing(8)
         self._theme_group = QButtonGroup(self)
         self._theme_group.setExclusive(True)
         self.theme_buttons: Dict[str, QPushButton] = {}
 
-        for key, label in [("ambient", "Ambient Reactive"), ("obsidian", "Pure Obsidian"), ("titanium", "Titanium")]:
+        for idx, (key, label, mode, c1_hex, c2_hex) in enumerate(self.THEME_PRESETS):
             btn = QPushButton(label)
             btn.setCheckable(True)
             btn.setFixedHeight(34)
@@ -494,7 +514,7 @@ class SettingsWindow(QMainWindow):
                 }}
                 QPushButton:hover {{
                     color: #FFFFFF;
-                    border-color: rgba(255, 255, 255, 0.18);
+                    border-color: rgba(255, 255, 255, 0.20);
                 }}
                 QPushButton:checked {{
                     background-color: {ACCENT_BLUE};
@@ -502,31 +522,31 @@ class SettingsWindow(QMainWindow):
                     border-color: {ACCENT_BLUE};
                 }}
             """)
-            btn.clicked.connect(lambda _, m=key: self._set_theme_mode(m))
+            btn.clicked.connect(lambda _, p=key: self._apply_theme_preset(p))
             self._theme_group.addButton(btn)
             self.theme_buttons[key] = btn
-            seg_row.addWidget(btn)
-        c1_lay.addLayout(seg_row)
+            preset_grid.addWidget(btn, idx // 4, idx % 4)
+        c1_lay.addLayout(preset_grid)
 
         c1_lay.addWidget(self._make_divider())
 
-        # Solid color swatches
+        # Custom Solid Tint & Dual Gradient
         swatch_row = QHBoxLayout()
-        swatch_row.setSpacing(10)
-        lbl_sw = QLabel("Custom Tint", page)
+        swatch_row.setSpacing(8)
+        lbl_sw = QLabel("Custom Finish", page)
         lbl_sw.setStyleSheet("font-size: 13px; font-weight: 600; color: #F2F2F7; border: none;")
         swatch_row.addWidget(lbl_sw)
         swatch_row.addStretch()
 
-        for hex_col in ["#08080C", "#11131A", "#181A22", "#1A1423", "#0D1A18"]:
+        for hex_col in ["#08080C", "#11131A", "#181A22", "#1A1423", "#0D1A18", "#1F1418"]:
             sw = QPushButton()
-            sw.setFixedSize(24, 24)
+            sw.setFixedSize(22, 22)
             sw.setCursor(Qt.CursorShape.PointingHandCursor)
             sw.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {hex_col};
                     border: 1px solid rgba(255, 255, 255, 0.22);
-                    border-radius: 12px;
+                    border-radius: 11px;
                 }}
                 QPushButton:hover {{
                     border: 2px solid #FFFFFF;
@@ -535,14 +555,58 @@ class SettingsWindow(QMainWindow):
             sw.clicked.connect(lambda _, hx=hex_col: self._set_solid_color(hx))
             swatch_row.addWidget(sw)
 
-        btn_pick = self._make_btn("Pick Color...")
+        btn_pick = self._make_btn("Solid...")
         btn_pick.clicked.connect(self._pick_custom_color)
         swatch_row.addWidget(btn_pick)
+
+        btn_grad = self._make_btn("Gradient...")
+        btn_grad.clicked.connect(self._pick_custom_gradient)
+        swatch_row.addWidget(btn_grad)
         c1_lay.addLayout(swatch_row)
         lay.addWidget(c1)
 
-        # Ambient Glow Intensity
-        c2, c2_lay = self._make_card("Ambient Glow")
+        # Clock Accent Color
+        c_clk, c_clk_lay = self._make_card("Clock Accent")
+        clk_row = QHBoxLayout()
+        clk_row.setSpacing(8)
+        lbl_clk = QLabel("Minute Accent Color", page)
+        lbl_clk.setStyleSheet("font-size: 13px; font-weight: 600; color: #F2F2F7; border: none;")
+        clk_row.addWidget(lbl_clk)
+        clk_row.addStretch()
+
+        self.clock_accent_buttons: Dict[str, QPushButton] = {}
+        btn_auto_clk = self._make_btn("Auto")
+        btn_auto_clk.setCheckable(True)
+        btn_auto_clk.clicked.connect(lambda: self._set_clock_accent("auto"))
+        self.clock_accent_buttons["auto"] = btn_auto_clk
+        clk_row.addWidget(btn_auto_clk)
+
+        for hx in ["#FF9F0A", "#34C759", "#0A84FF", "#BF5AF2", "#FF375F", "#FFFFFF"]:
+            cb = QPushButton()
+            cb.setCheckable(True)
+            cb.setFixedSize(22, 22)
+            cb.setCursor(Qt.CursorShape.PointingHandCursor)
+            cb.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {hx};
+                    border: 1px solid rgba(255, 255, 255, 0.25);
+                    border-radius: 11px;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #FFFFFF;
+                }}
+                QPushButton:checked {{
+                    border: 2px solid #FFFFFF;
+                }}
+            """)
+            cb.clicked.connect(lambda _, c=hx: self._set_clock_accent(c))
+            self.clock_accent_buttons[hx] = cb
+            clk_row.addWidget(cb)
+        c_clk_lay.addLayout(clk_row)
+        lay.addWidget(c_clk)
+
+        # Ambient Glow Intensity & Specular Rim
+        c2, c2_lay = self._make_card("Glow & Edge Rim")
         slider_row = QHBoxLayout()
         slider_row.setSpacing(14)
 
@@ -563,6 +627,15 @@ class SettingsWindow(QMainWindow):
             QWidget()
         ))
         c2_lay.addLayout(slider_row)
+        c2_lay.addWidget(self._make_divider())
+
+        self.sw_border = SwitchToggle(bool(self.cfg.get("show_border", True)))
+        self.sw_border.toggled.connect(self._on_border_toggled)
+        c2_lay.addWidget(self._make_row(
+            "Specular Rim Highlight",
+            "Displays a subtle luminous hairline along the screen bezel edge.",
+            self.sw_border
+        ))
         lay.addWidget(c2)
 
         lay.addStretch()
@@ -706,10 +779,16 @@ class SettingsWindow(QMainWindow):
         for k, btn in self.dock_buttons.items():
             btn.setChecked(k == edge)
 
-        theme = self.cfg.get("theme_mode", "ambient")
-        mapped_theme = "obsidian" if theme == "solid" else theme
+        preset = self.cfg.get("theme_preset", "")
+        if not preset:
+            theme = self.cfg.get("theme_mode", "ambient")
+            preset = "obsidian" if theme == "solid" else theme
         for k, btn in self.theme_buttons.items():
-            btn.setChecked(k == mapped_theme)
+            btn.setChecked(k == preset)
+
+        clk_acc = self.cfg.get("clock_accent", "auto")
+        for k, btn in self.clock_accent_buttons.items():
+            btn.setChecked(k.lower() == str(clk_acc).lower())
 
         op = float(self.cfg.get("ambient_opacity", 0.24))
         pct = max(0, min(100, int(round(op * 100))))
@@ -718,6 +797,8 @@ class SettingsWindow(QMainWindow):
         self.slider_glow.blockSignals(False)
         self.lbl_glow_val.setText(f"{pct}%")
 
+        self.sw_hover_expand.setChecked(bool(self.cfg.get("hover_to_expand", True)), emit=False)
+        self.sw_border.setChecked(bool(self.cfg.get("show_border", True)), emit=False)
         self.sw_autohide.setChecked(bool(self.cfg.get("auto_hide", False)), emit=False)
         self.sw_autostart.setChecked(is_autostart_enabled(), emit=False)
 
@@ -770,33 +851,89 @@ class SettingsWindow(QMainWindow):
             self.island._time_format = val
             self.island.update()
 
-    def _set_theme_mode(self, mode: str):
-        self.cfg["theme_mode"] = mode
-        settings.set("theme_mode", mode)
-        for k, btn in self.theme_buttons.items():
-            btn.setChecked(k == mode)
+    def _on_hover_expand_toggled(self, checked: bool):
+        self.cfg["hover_to_expand"] = checked
+        settings.set("hover_to_expand", checked)
+        if self.island:
+            self.island._hover_to_expand = checked
 
-        if not self.island:
-            return
-        if mode == "ambient":
-            self.island.set_theme_ambient(float(self.cfg.get("ambient_opacity", 0.24)))
-        elif mode == "obsidian":
-            self.island.set_theme_solid(QColor("#08080C"))
-        elif mode == "titanium":
-            self.island.set_theme_solid(QColor("#181A22"))
+    def _on_border_toggled(self, checked: bool):
+        self.cfg["show_border"] = checked
+        settings.set("show_border", checked)
+        if self.island:
+            self.island._show_border = checked
+            self.island.update()
+
+    def _set_clock_accent(self, accent: str):
+        self.cfg["clock_accent"] = accent
+        settings.set("clock_accent", accent)
+        for k, btn in self.clock_accent_buttons.items():
+            btn.setChecked(k.lower() == accent.lower())
+        if self.island:
+            self.island._clock_accent = accent
+            self.island.update()
+
+    def _apply_theme_preset(self, preset_key: str):
+        for key, _lbl, mode, c1_hex, c2_hex in self.THEME_PRESETS:
+            if key == preset_key:
+                self.cfg["theme_preset"] = key
+                self.cfg["theme_mode"] = mode
+                for k, btn in self.theme_buttons.items():
+                    btn.setChecked(k == key)
+                if mode == "ambient":
+                    op = float(self.cfg.get("ambient_opacity", 0.24))
+                    settings.update({"theme_preset": key, "theme_mode": "ambient"})
+                    if self.island:
+                        self.island.set_theme_ambient(op)
+                elif mode == "solid":
+                    self.cfg["solid_color"] = c1_hex
+                    settings.update({"theme_preset": key, "theme_mode": "solid", "solid_color": c1_hex})
+                    if self.island:
+                        self.island.set_theme_solid(QColor(c1_hex))
+                elif mode == "gradient":
+                    self.cfg["gradient_c1"] = c1_hex
+                    self.cfg["gradient_c2"] = c2_hex
+                    settings.update({"theme_preset": key, "theme_mode": "gradient", "gradient_c1": c1_hex, "gradient_c2": c2_hex})
+                    if self.island:
+                        self.island.set_theme_gradient(QColor(c1_hex), QColor(c2_hex))
+                break
 
     def _set_solid_color(self, hex_code: str):
         self.cfg["solid_color"] = hex_code
         self.cfg["theme_mode"] = "solid"
-        settings.update({"solid_color": hex_code, "theme_mode": "solid"})
-        self.theme_buttons["obsidian"].setChecked(True)
+        self.cfg["theme_preset"] = "custom_solid"
+        settings.update({"solid_color": hex_code, "theme_mode": "solid", "theme_preset": "custom_solid"})
+        for btn in self.theme_buttons.values():
+            btn.setChecked(False)
         if self.island:
             self.island.set_theme_solid(QColor(hex_code))
 
     def _pick_custom_color(self):
-        c = QColorDialog.getColor(QColor(self.cfg.get("solid_color", "#08080C")), self, "Select Island Color")
+        c = QColorDialog.getColor(QColor(self.cfg.get("solid_color", "#08080C")), self, "Select Island Solid Color")
         if c.isValid():
             self._set_solid_color(c.name())
+
+    def _pick_custom_gradient(self):
+        c1 = QColorDialog.getColor(QColor(self.cfg.get("gradient_c1", "#0A1628")), self, "Select Gradient Start Color")
+        if not c1.isValid():
+            return
+        c2 = QColorDialog.getColor(QColor(self.cfg.get("gradient_c2", "#050912")), self, "Select Gradient End Color")
+        if not c2.isValid():
+            return
+        self.cfg["gradient_c1"] = c1.name()
+        self.cfg["gradient_c2"] = c2.name()
+        self.cfg["theme_mode"] = "gradient"
+        self.cfg["theme_preset"] = "custom_gradient"
+        settings.update({
+            "gradient_c1": c1.name(),
+            "gradient_c2": c2.name(),
+            "theme_mode": "gradient",
+            "theme_preset": "custom_gradient",
+        })
+        for btn in self.theme_buttons.values():
+            btn.setChecked(False)
+        if self.island:
+            self.island.set_theme_gradient(c1, c2)
 
     def _on_glow_slider_changed(self, val: int):
         self.lbl_glow_val.setText(f"{val}%")
