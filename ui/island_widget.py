@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import (
     QObject,
-    Qt, QPoint, QPointF, QRectF, QTimer, QPropertyAnimation,
+    Qt, QPoint, QPointF, QRectF, QTimer, QPropertyAnimation, QVariantAnimation,
     QEasingCurve, pyqtSignal, pyqtProperty, QEvent
 )
 from PyQt6.QtGui import (
@@ -793,14 +793,16 @@ class DynamicIslandWidget(QWidget):
         # Build Interactive Dashboard Layout (Expanded State)
         self._init_dashboard_ui()
 
-        # 60 FPS Render Timer
+        # 60 FPS Render Timer (PreciseTimer prevents Windows 15ms coarse timer jitter)
         self._render_timer = QTimer(self)
+        self._render_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self._render_timer.setInterval(16)
         self._render_timer.timeout.connect(self._on_render_tick)
         self._render_timer.start()
 
         # Ticker Timer: 60 FPS silky smooth scrolling
         self._ticker_timer = QTimer(self)
+        self._ticker_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self._ticker_timer.setInterval(16)
         self._ticker_timer.timeout.connect(self._on_ticker_tick)
         self._ticker_timer.start()
@@ -1188,35 +1190,43 @@ class DynamicIslandWidget(QWidget):
                 self._geo_animation.finished.disconnect()
             except Exception:
                 pass
-            if self._geo_animation.state() == QPropertyAnimation.State.Running:
+            try:
+                self._geo_animation.valueChanged.disconnect()
+            except Exception:
+                pass
+            if self._geo_animation.state() == QVariantAnimation.State.Running:
                 self._geo_animation.stop()
 
-        if hasattr(self, "_expand_anim") and self._expand_anim.state() == QPropertyAnimation.State.Running:
+        if hasattr(self, "_expand_anim") and self._expand_anim and self._expand_anim.state() == QPropertyAnimation.State.Running:
             self._expand_anim.stop()
 
-        duration = 320 if state in ("expanded", "device_popup") else 260
-        easing = QEasingCurve.Type.OutCubic if state == "expanded" else QEasingCurve.Type.OutQuad
+        duration = 340 if state in ("expanded", "device_popup") else 280
+        easing = QEasingCurve.Type.OutQuart if state in ("expanded", "device_popup") else QEasingCurve.Type.OutCubic
 
-        self._geo_animation = QPropertyAnimation(self, b"geometry")
-        self._geo_animation.setDuration(duration)
-        self._geo_animation.setEasingCurve(easing)
-        self._geo_animation.setStartValue(self.geometry())
-        self._geo_animation.setEndValue(QRectF(x, y, w, h).toRect())
-
-        target_p = 1.0 if state == "expanded" else 0.0
+        start_geo = QRectF(self.geometry())
+        end_geo = QRectF(x, y, w, h)
         start_p = self.get_expand_progress()
+        target_p = 1.0 if state == "expanded" else 0.0
 
-        self._expand_anim = QPropertyAnimation(self, b"expand_progress")
-        self._expand_anim.setDuration(duration)
-        self._expand_anim.setEasingCurve(easing)
-        self._expand_anim.setStartValue(start_p)
-        self._expand_anim.setEndValue(target_p)
+        anim = QVariantAnimation(self)
+        anim.setDuration(duration)
+        anim.setEasingCurve(easing)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
 
-        # Do not force child container visibility at p=0.0 to prevent layout compression jitter
-        self._geo_animation.finished.connect(self._on_geo_anim_finished)
+        def _on_step(t_val):
+            t = float(t_val)
+            cur_x = round(start_geo.x() + (end_geo.x() - start_geo.x()) * t)
+            cur_y = round(start_geo.y() + (end_geo.y() - start_geo.y()) * t)
+            cur_w = max(1, round(start_geo.width() + (end_geo.width() - start_geo.width()) * t))
+            cur_h = max(1, round(start_geo.height() + (end_geo.height() - start_geo.height()) * t))
+            self.setGeometry(cur_x, cur_y, cur_w, cur_h)
+            self.set_expand_progress(start_p + (target_p - start_p) * t)
 
+        anim.valueChanged.connect(_on_step)
+        anim.finished.connect(self._on_geo_anim_finished)
+        self._geo_animation = anim
         self._geo_animation.start()
-        self._expand_anim.start()
 
     def _update_child_visibility(self, state: str):
         edge = getattr(self, "_dock_edge", "top")
@@ -2392,29 +2402,30 @@ class DynamicIslandWidget(QWidget):
                     self._vertical_eq_heights[idx] += (wave - self._vertical_eq_heights[idx]) * 0.25
                 self._corner_eq_heights = self._vertical_eq_heights
 
-        # Liquid morphing interpolation (lerp factor 0.18 for viscous fluid morphing)
-        lerp_morph = 0.18
+        # Liquid morphing interpolation (lerp factor 0.20 for viscous fluid morphing)
+        lerp_morph = 0.20
         old_morph = self._dock_morph
-        self._dock_morph += (self._target_morph - self._dock_morph) * lerp_morph
-        if abs(self._dock_morph - old_morph) > 0.001:
+        if abs(self._target_morph - self._dock_morph) < 0.002:
+            self._dock_morph = self._target_morph
+        else:
+            self._dock_morph += (self._target_morph - self._dock_morph) * lerp_morph
+        if abs(self._dock_morph - old_morph) > 0.0005:
             self.update()
 
-        # Smooth live stretching & geometry interpolation during dragging
+        # Single authoritative 60 FPS live stretching & geometry interpolation during dragging
         if getattr(self, "_is_dragging", False) and hasattr(self, "_target_w"):
             dx = abs(self._target_x - self._live_x)
             dy = abs(self._target_y - self._live_y)
             dw = abs(self._target_w - self._live_w)
             dh = abs(self._target_h - self._live_h)
-            if dw > 0.5 or dh > 0.5 or dx > 0.5 or dy > 0.5:
-                lerp_p = 0.45
-                lerp_s = 0.35
-                self._live_x += (self._target_x - self._live_x) * lerp_p
-                self._live_y += (self._target_y - self._live_y) * lerp_p
-                self._live_w += (self._target_w - self._live_w) * lerp_s
-                self._live_h += (self._target_h - self._live_h) * lerp_s
-                self.setGeometry(int(self._live_x), int(self._live_y), int(self._live_w), int(self._live_h))
-                if getattr(self, "_drag_mode", "compact") == "expanded":
-                    self._update_child_visibility("expanded")
+            if dw > 0.35 or dh > 0.35 or dx > 0.35 or dy > 0.35:
+                lerp_p = 0.42
+                lerp_s = 0.25
+                self._live_x = self._target_x if dx <= 0.35 else (self._live_x + (self._target_x - self._live_x) * lerp_p)
+                self._live_y = self._target_y if dy <= 0.35 else (self._live_y + (self._target_y - self._live_y) * lerp_p)
+                self._live_w = self._target_w if dw <= 0.35 else (self._live_w + (self._target_w - self._live_w) * lerp_s)
+                self._live_h = self._target_h if dh <= 0.35 else (self._live_h + (self._target_h - self._live_h) * lerp_s)
+                self.setGeometry(round(self._live_x), round(self._live_y), max(1, round(self._live_w)), max(1, round(self._live_h)))
                 if getattr(self, "_dock_edge", "top") in ("bottom", "bottom-left", "bottom-right"):
                     self._ensure_behind_taskbar()
                 self.update()
@@ -2579,8 +2590,14 @@ class DynamicIslandWidget(QWidget):
             # Stop any hover timers & in-flight animations so they never contest user drag
             self._hover_expand_timer.stop()
             self._hover_collapse_timer.stop()
-            if getattr(self, "_geo_animation", None) and self._geo_animation.state() == QPropertyAnimation.State.Running:
-                self._geo_animation.stop()
+            if getattr(self, "_geo_animation", None):
+                try:
+                    self._geo_animation.finished.disconnect()
+                    self._geo_animation.valueChanged.disconnect()
+                except Exception:
+                    pass
+                if self._geo_animation.state() == QVariantAnimation.State.Running:
+                    self._geo_animation.stop()
 
         super().mousePressEvent(event)
 
@@ -2748,24 +2765,13 @@ class DynamicIslandWidget(QWidget):
                         self._live_w = float(self.width())
                         self._live_h = float(self.height())
 
-                    # Fluid stretching and position tracking
-                    lerp_p = 0.55
-                    lerp_s = 0.35
-                    self._live_x += (self._target_x - self._live_x) * lerp_p
-                    self._live_y += (self._target_y - self._live_y) * lerp_p
-                    self._live_w += (self._target_w - self._live_w) * lerp_s
-                    self._live_h += (self._target_h - self._live_h) * lerp_s
-
+                    edge_changed = (target_edge != prev_edge)
                     self._dock_edge = target_edge
                     self._target_morph = 0.0 if target_edge == "floating" else 1.0
 
-                    self.setGeometry(int(self._live_x), int(self._live_y), int(self._live_w), int(self._live_h))
-
-                    if is_exp:
+                    # Let the 60 FPS PreciseTimer render loop drive smooth geometry interpolation
+                    if edge_changed and is_exp:
                         self._update_child_visibility("expanded")
-                    if target_edge in ("bottom", "bottom-left", "bottom-right"):
-                        self._ensure_behind_taskbar()
-                    self.update()
                     return
             except Exception as e:
                 import traceback
