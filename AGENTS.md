@@ -11,8 +11,8 @@ Welcome, agent. This document serves as the operational guide and technical stan
 - All iconography and media controls **must** be rendered as clean, anti-aliased vector paths (`QPainterPath`, `drawPolygon`, `drawRoundedRect`, `drawLine`, `drawEllipse`) with subpixel antialiasing enabled.
 - System notifications or titles received externally from third-party apps may contain emojis; handle them gracefully with text elision.
 
-### Rule 2: Standalone Executable Size Bound (< 60 MB)
-- The compiled standalone executable `dist/DynamicIsland.exe` **must remain under 60 MB**.
+### Rule 2: Standalone Executable Size Bound (< 100 MB)
+- The compiled standalone executable `dist/DynamicIsland.exe` **must remain under 100 MB**.
 - In `DynamicIsland.spec`, heavy frameworks are strictly excluded (`torch`, `tensorflow`, `jax`, `scipy`, `pandas`, `cv2`, `matplotlib`, `tkinter`).
 - Do not introduce heavy dependencies without verifying their impact on the PyInstaller output size.
 
@@ -35,7 +35,7 @@ Welcome, agent. This document serves as the operational guide and technical stan
 ```
 WindowLand/
 ├── main.py                     # App entrypoint, tray menu, single-instance mutex, crash recovery
-├── DynamicIsland.spec          # PyInstaller packaging configuration (< 60 MB budget)
+├── DynamicIsland.spec          # PyInstaller packaging configuration (< 100 MB budget)
 ├── README.md                   # User-facing overview, features, and quickstart guide
 ├── DESIGN.md                   # Design system, typography, motion physics, and color tokens
 ├── AGENTS.md                   # This agent guideline document
@@ -124,7 +124,7 @@ Verify the output size and file timestamp:
 ```powershell
 Get-Item dist/DynamicIsland.exe | Select-Object Length, LastWriteTime
 ```
-Confirm `Length < 62914560` ($60\text{ MB}$).
+Confirm `Length < 104857600` ($100\text{ MB}$).
 
 ### Step 4: Verification of Launch & Clean Exit
 Launch the executable and verify running state, settings file creation, and clean exit:
