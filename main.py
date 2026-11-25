@@ -75,14 +75,17 @@ def _cleanup_temp_residue():
     try:
         temp_dir = tempfile.gettempdir()
         current_mei = getattr(sys, "_MEIPASS", "")
+        # Also clean MEIPASS2 from current process environment if it exists
+        os.environ.pop("_MEIPASS2", None)
         for item in os.listdir(temp_dir):
             if item.startswith("_MEI"):
                 full_path = os.path.join(temp_dir, item)
                 if current_mei and os.path.abspath(full_path) == os.path.abspath(current_mei):
                     continue
                 try:
-                    # Clean folders older than 30 minutes
-                    if time.time() - os.path.getmtime(full_path) > 1800:
+                    # Clean folders older than 15 minutes or corrupted ones missing base library
+                    age = time.time() - os.path.getmtime(full_path)
+                    if age > 900 or not os.path.exists(os.path.join(full_path, "base_library.zip")):
                         shutil.rmtree(full_path, ignore_errors=True)
                 except Exception:
                     pass
@@ -156,9 +159,9 @@ def _respawn_self():
         CREATE_NEW_PROCESS_GROUP = 0x00000200
         flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
         env = os.environ.copy()
-        env.pop('_MEIPASS2', None)
-        env.pop('PYTHONPATH', None)
-        env.pop('PYTHONHOME', None)
+        for k in list(env.keys()):
+            if k.startswith("_MEI") or k in ("PYTHONPATH", "PYTHONHOME"):
+                env.pop(k, None)
         subprocess.Popen(target, env=env, creationflags=flags, close_fds=True)
     except Exception as e:
         log_file = os.path.join(os.path.expanduser("~"), "DynamicIsland_crash.log")
@@ -220,7 +223,11 @@ from services.system_service import SystemService
 from services.device_listener import DeviceService
 from services.autostart_service import set_autostart
 from services.phone_bridge import PhoneBridgeService
-from bridge.phone_bridge import PhoneBridge
+try:
+    from bridge.phone_bridge import PhoneBridge
+except Exception as _e:
+    PhoneBridge = None
+    print(f"Warning: bridge.phone_bridge optional import skipped: {_e}")
 from ui.island_widget import DynamicIslandWidget
 
 
@@ -295,24 +302,31 @@ def main():
     system_service = SystemService()
     device_service = DeviceService()
     phone_service = PhoneBridgeService(port=54321)
-    phone_bridge = PhoneBridge(
-        port=8765,
-        on_wake=lambda: island.phone_signals.wake_requested.emit() if hasattr(island, "phone_signals") else None,
-        on_open_settings=lambda: island.show_settings_requested.emit() if hasattr(island, "show_settings_requested") else None,
-    )
-
-    def _run_bridge_loop():
+    phone_bridge = None
+    if PhoneBridge is not None:
         try:
-            import asyncio
-            asyncio.run(phone_bridge.run_forever())
-        except Exception as e:
-            print(f"WinDin-Link bridge server error: {e}")
+            phone_bridge = PhoneBridge(
+                port=8765,
+                on_wake=lambda: island.phone_signals.wake_requested.emit() if hasattr(island, "phone_signals") else None,
+                on_open_settings=lambda: island.show_settings_requested.emit() if hasattr(island, "show_settings_requested") else None,
+            )
 
-    bridge_thread = threading.Thread(target=_run_bridge_loop, daemon=True, name="WinDinLinkBridge")
-    bridge_thread.start()
+            def _run_bridge_loop():
+                try:
+                    import asyncio
+                    asyncio.run(phone_bridge.run_forever())
+                except Exception as e:
+                    print(f"WinDin-Link bridge server error: {e}")
+
+            bridge_thread = threading.Thread(target=_run_bridge_loop, daemon=True, name="WinDinLinkBridge")
+            bridge_thread.start()
+        except Exception as e:
+            print(f"WinDin-Link bridge init error: {e}")
+            phone_bridge = None
 
     island = DynamicIslandWidget(media_service, system_service, device_service)
-    island.set_phone_bridge(phone_bridge)
+    if phone_bridge is not None:
+        island.set_phone_bridge(phone_bridge)
 
     # Restore user settings (position, screen, dock edge, theme, auto-hide)
     from services.settings_service import settings
