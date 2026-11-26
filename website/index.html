@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WinDin — Dynamic Island & Win Drop for Windows 11</title>
+  <meta name="description" content="Apple-grade Dynamic Island hardware notch and seamless Win Drop zero-cloud file continuity for Windows 11 and Android companion.">
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="WinDin — Dynamic Island & Win Drop for Windows">
+  <meta property="og:description" content="Liquid multitasking hardware notch and zero-cloud phone bridge engineered in obsidian glass.">
+  <meta property="og:image" content="assets/logo.svg">
+  <meta property="og:type" content="website">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Ambient Lighting Glow -->
+  <div class="ambient-glow-top"></div>
+
+  <!-- ── Top Glass Navigation ──────────────────────────────────────────────── -->
+  <nav class="site-nav">
+    <div class="nav-container">
+      <a href="#" class="nav-brand">
+        <img src="assets/logo.svg" alt="WinDin Logo" width="28" height="28">
+        <span>WinDin</span>
+        <span class="brand-badge">v2.0</span>
+      </a>
+
+      <div class="nav-links">
+        <a href="#playground">Simulator</a>
+        <a href="#features">Features</a>
+        <a href="#setup">Setup</a>
+        <a href="#downloads">Downloads</a>
+        <a href="#changelog">Changelog</a>
+      </div>
+
+      <div class="nav-actions">
+        <a href="https://github.com/pase5/WinDin" target="_blank" rel="noopener noreferrer" class="btn-glass-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+          </svg>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Main Content Container ────────────────────────────────────────────── -->
+  <main>
+
+    <!-- ── Hero Section ────────────────────────────────────────────────────── -->
+    <section class="section-wrapper hero-section">
+      <div class="hero-pill-badge">
+        <span class="hero-pulse-dot"></span>
+        <span>Hardware Notch & Win Drop Continuity for Windows 11</span>
+      </div>
+
+      <h1 class="hero-title">
+        Dynamic Island for Windows. <br>
+        <span class="text-gradient">Engineered in Liquid Obsidian.</span>
+      </h1>
+
+      <p class="hero-subtitle">
+        A seamless hardware notch floating behind the Windows taskbar, paired with instant zero-cloud file streaming to your phone.
+      </p>
+
+      <div class="hero-cta-group">
+        <a href="#downloads" class="btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Get WinDin for Windows</span>
+        </a>
+
+        <a href="#downloads" class="btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="3" ry="3"></rect>
+            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+          </svg>
+          <span>Android Companion APK</span>
+        </a>
+      </div>
+
+      <!-- ── Live Dynamic Island Simulator Playground ──────────────────────── -->
+      <div class="simulator-container" id="playground">
+        <div class="desktop-stage" id="desktopStage">
+
+          <!-- Top-Edge Radiant Corona Light Bloom -->
+          <div class="corona-bloom-layer" id="islandCoronaBloom"></div>
+
+          <!-- Hardware Notch Shell -->
+          <div class="island-notch state-compact" id="islandSimulator" title="Hover to expand, or drop files here">
+
+            <!-- 1. Compact Idle / Music View -->
+            <div class="island-view-compact" id="viewCompact">
+              <div class="sim-clock-wrap">
+                <span class="clock-hh" id="simClockHh">10</span>
+                <span class="clock-sep">:</span>
+                <span class="clock-mm" id="simClockMm">38</span>
+              </div>
+
+              <div class="sim-equalizer-bars" id="simEqualizer">
+                <div class="sim-eq-bar"></div>
+                <div class="sim-eq-bar"></div>
+                <div class="sim-eq-bar"></div>
+                <div class="sim-eq-bar"></div>
+                <div class="sim-eq-bar"></div>
+              </div>
+            </div>
+
+            <!-- 2. Expanded Media Player View -->
+            <div class="island-view-expanded" id="viewExpanded">
+              <div class="expanded-top-row">
+                <div class="exp-art-box">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 18V5l12-2v13"></path>
+                    <circle cx="6" cy="18" r="3"></circle>
+                    <circle cx="18" cy="16" r="3"></circle>
+                  </svg>
+                </div>
+                <div class="exp-track-info">
+                  <div class="exp-track-title">WindowLand Dreams</div>
+                  <div class="exp-track-artist">WinDin Hi-Fi Audio</div>
+                </div>
+                <div class="exp-playback-controls">
+                  <button class="ctrl-btn" type="button" aria-label="Previous Track">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="19 20 9 12 19 4 19 20"></polygon>
+                      <line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2.5"></line>
+                    </svg>
+                  </button>
+                  <button class="ctrl-btn btn-play" id="simPlayBtn" type="button" aria-label="Play / Pause">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="6" y="4" width="4" height="16" rx="1.5"></rect>
+                      <rect x="14" y="4" width="4" height="16" rx="1.5"></rect>
+                    </svg>
+                  </button>
+                  <button class="ctrl-btn" type="button" aria-label="Next Track">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                      <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"></line>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Scrubber Bar -->
+              <div class="scrubber-wrap">
+                <span class="time-stamp" id="simCurrentTime">01:34</span>
+                <div class="scrubber-bar-track">
+                  <div class="scrubber-progress" id="simScrubberProgress"></div>
+                </div>
+                <span class="time-stamp">03:45</span>
+              </div>
+            </div>
+
+            <!-- 3. Win Drop Transfer Sequence View -->
+            <div class="island-view-windrop" id="viewWindrop">
+              <div class="windrop-badge">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="5" y="2" width="14" height="20" rx="3" ry="3"></rect>
+                  <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                </svg>
+              </div>
+              <div class="windrop-info">
+                <div class="windrop-title">Win Drop</div>
+                <div class="windrop-subtitle" id="windropSubtitle">Drop to Send</div>
+              </div>
+              <div class="windrop-ring-box">
+                <svg class="windrop-svg-ring" viewBox="0 0 28 28">
+                  <circle class="ring-bg" cx="14" cy="14" r="12" fill="none" stroke-width="2.5"></circle>
+                  <circle class="ring-prog" id="windropRingProg" cx="14" cy="14" r="12" fill="none" stroke-width="2.5"></circle>
+                </svg>
+                <div class="windrop-checkmark" id="windropCheckmark">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Bottom Playground Interaction Guide -->
+          <div class="desktop-stage-body">
+            <p class="stage-instructions">Hover or click the notch to expand. Drag the file below onto the island to test Win Drop:</p>
+            <div class="mock-drag-pill" id="mockDragPill" draggable="true" title="Drag me to the island above, or click to test!">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              <span>screenshot_2026.png</span>
+              <span style="font-size:0.75rem; color:var(--accent-lime); font-weight:700;">• DRAG ME</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Bento Feature Showcase ─────────────────────────────────────────── -->
+    <section class="section-wrapper" id="features">
+      <div class="section-header">
+        <span class="section-tag">Architecture & Features</span>
+        <h2 class="section-title">Designed for Windows 11. Refined for Obsidian.</h2>
+        <p class="section-desc">Zero bloat, subpixel vector rendering, and zero-cloud local socket continuity between your desktop and smartphone.</p>
+      </div>
+
+      <div class="bento-grid">
+
+        <!-- Bento Card 1: 9-Edge Magnetic Docking -->
+        <div class="bento-card col-8">
+          <div>
+            <div class="bento-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="3" y1="9" x2="21" y2="9"></line>
+                <line x1="9" y1="21" x2="9" y2="9"></line>
+              </svg>
+            </div>
+            <h3 class="bento-card-title">9-Edge Magnetic Docking Geometry</h3>
+            <p class="bento-card-desc">
+              Snap seamlessly to Top, Bottom, Left, Right, all four screen corners, or float as an organic liquid squircle capsule anywhere on your multi-monitor desktop.
+            </p>
+          </div>
+
+          <!-- Interactive 3x3 Docking Visual Preview -->
+          <div class="bento-visual-docking">
+            <div class="dock-target-pill">Top-Left</div>
+            <div class="dock-target-pill active">Top-Center</div>
+            <div class="dock-target-pill">Top-Right</div>
+            <div class="dock-target-pill">Left</div>
+            <div class="dock-target-pill">Floating</div>
+            <div class="dock-target-pill">Right</div>
+            <div class="dock-target-pill">Bottom-Left</div>
+            <div class="dock-target-pill">Bottom</div>
+            <div class="dock-target-pill">Bottom-Right</div>
+          </div>
+        </div>
+
+        <!-- Bento Card 2: 26-Band WASAPI Audio Visualizer -->
+        <div class="bento-card col-4">
+          <div>
+            <div class="bento-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+              </svg>
+            </div>
+            <h3 class="bento-card-title">WASAPI Loopback Spectrum</h3>
+            <p class="bento-card-desc">
+              Real-time NumPy harmonic FFT analysis analyzing system output with sub-millisecond latency.
+            </p>
+          </div>
+
+          <!-- Live Spectrum Bars Diagram -->
+          <div class="bento-visual-spectrum">
+            <div class="spectrum-col" style="animation-delay:0.1s;"></div>
+            <div class="spectrum-col" style="animation-delay:0.4s;"></div>
+            <div class="spectrum-col" style="animation-delay:0.2s;"></div>
+            <div class="spectrum-col" style="animation-delay:0.6s;"></div>
+            <div class="spectrum-col" style="animation-delay:0.15s;"></div>
+            <div class="spectrum-col" style="animation-delay:0.5s;"></div>
+            <div class="spectrum-col" style="animation-delay:0.3s;"></div>
+            <div class="spectrum-col" style="animation-delay:0.7s;"></div>
+            <div class="spectrum-col" style="animation-delay:0.25s;"></div>
+            <div class="spectrum-col" style="animation-delay:0.45s;"></div>
+          </div>
+        </div>
+
+        <!-- Bento Card 3: Zero-Cloud LAN WebSocket Link -->
+        <div class="bento-card col-6">
+          <div>
+            <div class="bento-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+              </svg>
+            </div>
+            <h3 class="bento-card-title">Zero-Cloud Local Wi-Fi Bridge</h3>
+            <p class="bento-card-desc">
+              mDNS auto-discovery and asynchronous binary streaming keep your files, clipboard buffers, and phone notifications strictly within your private local network.
+            </p>
+          </div>
+
+          <div class="bento-visual-drops">
+            <div class="drop-node">
+              <div class="drop-node-box">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </div>
+              <span style="font-size:0.75rem; color:var(--text-muted);">Windows PC</span>
+            </div>
+
+            <div class="drop-beam-line">
+              <div class="drop-beam-pulse"></div>
+            </div>
+
+            <div class="drop-node">
+              <div class="drop-node-box">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="3"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              </div>
+              <span style="font-size:0.75rem; color:var(--text-muted);">Android Companion</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bento Card 4: Silent MediaStore Gallery Drops -->
+        <div class="bento-card col-6">
+          <div>
+            <div class="bento-icon-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </div>
+            <h3 class="bento-card-title">Silent MediaStore Gallery Drops</h3>
+            <p class="bento-card-desc">
+              Dropped screenshots and photos automatically register directly into Android’s MediaStore, appearing immediately inside your phone’s Photos gallery with zero confirmation dialogs.
+            </p>
+          </div>
+
+          <div style="background:rgba(0,0,0,0.3); border-radius:12px; border:1px solid var(--border-subtle); padding:16px; font-size:0.85rem; font-family:var(--font-mono); color:rgba(255,255,255,0.75);">
+            <div style="color:var(--accent-green); margin-bottom:6px;">✓ MediaStore.Images.Media.EXTERNAL_CONTENT_URI</div>
+            <div>Saved directly to /Pictures/WinDin</div>
+            <div style="color:var(--text-muted); font-size:0.72rem; margin-top:4px;">Zero cloud latency • Zero third-party telemetry</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── 3-Step Setup Flow ──────────────────────────────────────────────── -->
+    <section class="section-wrapper" id="setup">
+      <div class="section-header">
+        <span class="section-tag">Pairing & Quickstart</span>
+        <h2 class="section-title">Up and Running in 30 Seconds</h2>
+        <p class="section-desc">No accounts. No sign-ups. No external servers.</p>
+      </div>
+
+      <div class="flow-steps-grid">
+        <div class="step-card">
+          <div class="step-num-badge">1</div>
+          <h3 class="step-title">Run WinDin on Windows</h3>
+          <p class="step-desc">
+            Download and run <code>DynamicIsland.exe</code>. The hardware notch anchors smoothly to your screen edge behind the Windows taskbar.
+          </p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num-badge">2</div>
+          <h3 class="step-title">Scan QR on Android</h3>
+          <p class="step-desc">
+            Click <strong>Pair Phone</strong> on your desktop and scan the generated local token with the WinDin Mobile Companion camera scanner.
+          </p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num-badge">3</div>
+          <h3 class="step-title">Win Drop Anywhere</h3>
+          <p class="step-desc">
+            Drag files, screenshots, or documents onto the top screen edge to beam them immediately to your phone over your local network.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── GitHub Releases Hub & Download Hub ─────────────────────────────── -->
+    <section class="section-wrapper" id="downloads">
+      <div class="section-header">
+        <span class="section-tag">Direct Downloads</span>
+        <h2 class="section-title">Download WinDin & Mobile Companion</h2>
+        <p class="section-desc">Standalone, lightweight, and always updated directly from GitHub Releases.</p>
+      </div>
+
+      <div class="downloads-grid">
+
+        <!-- Windows Card -->
+        <div class="download-card card-windows">
+          <div>
+            <div class="card-platform-head">
+              <div class="platform-pill">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
+                </svg>
+                <span>Windows 11 / 10</span>
+              </div>
+              <span class="release-tag-pill" id="winVersionTag">v2.0.0</span>
+            </div>
+
+            <h3 class="card-software-name">DynamicIsland.exe</h3>
+            <p class="card-software-desc">
+              Standalone executable with WASAPI audio analysis, 9-edge docking engine, and Win Drop continuity server.
+            </p>
+
+            <div class="meta-stats-row">
+              <div class="meta-item">
+                <span class="meta-label">File Size</span>
+                <span class="meta-val" id="winFileSize">50.2 MB</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Release Date</span>
+                <span class="meta-val" id="winReleaseDate">Latest</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">License</span>
+                <span class="meta-val">MIT Open Source</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <a href="https://github.com/pase5/WinDin/releases/latest" id="winDownloadBtn" class="btn-download-big" download>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Download for Windows (.exe)</span>
+            </a>
+
+            <!-- Windows SmartScreen Microguide -->
+            <div class="install-microguide">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+              <div>
+                <strong>Windows SmartScreen notice:</strong> If Windows prompts "Windows protected your PC", click <u>More info</u> &rarr; <u>Run anyway</u>. WinDin is fully open-source and standalone.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Android Card -->
+        <div class="download-card">
+          <div>
+            <div class="card-platform-head">
+              <div class="platform-pill">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5802 8.3585 13.8504 8.016 12 8.016c-1.8505 0-3.5803.3425-5.1368.9337L4.841 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/>
+                </svg>
+                <span>Android 8.0+</span>
+              </div>
+              <span class="release-tag-pill" id="apkVersionTag">v2.0.0</span>
+            </div>
+
+            <h3 class="card-software-name">WinDin.apk</h3>
+            <p class="card-software-desc">
+              Native Kotlin & Jetpack Compose companion app for silent MediaStore photo drops and battery sync.
+            </p>
+
+            <div class="meta-stats-row">
+              <div class="meta-item">
+                <span class="meta-label">File Size</span>
+                <span class="meta-val" id="apkFileSize">39.5 MB</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Release Date</span>
+                <span class="meta-val" id="apkReleaseDate">Latest</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Target SDK</span>
+                <span class="meta-val">Android 14 (API 34)</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <a href="https://github.com/pase5/WinDin/releases/latest" id="apkDownloadBtn" class="btn-download-big btn-download-android" download>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Download Companion (.apk)</span>
+            </a>
+
+            <!-- Android Install Note -->
+            <div class="install-microguide">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <div>
+                <strong>Direct Sideload Note:</strong> Enable <u>Install unknown apps</u> in your phone settings or browser when downloading the companion APK.
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Auto-Updating GitHub Releases Changelog ────────────────────────── -->
+      <div class="changelog-box" id="changelog">
+        <div class="changelog-header-row">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            <h3 class="changelog-title">Latest Release Notes</h3>
+          </div>
+          <span style="font-size:0.85rem; color:var(--text-muted); font-family:var(--font-mono);" id="changelogVersion">v2.0.0 • Loading...</span>
+        </div>
+
+        <div class="changelog-body" id="changelogContent">
+          <p style="color:var(--text-muted);">Fetching latest release notes from GitHub...</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Site Footer ──────────────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="footer-nav">
+      <a href="#playground">Simulator</a>
+      <a href="#features">Features</a>
+      <a href="#setup">Pairing Guide</a>
+      <a href="#downloads">Downloads</a>
+      <a href="https://github.com/pase5/WinDin" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
+    </div>
+
+    <p style="margin-bottom:0.6rem;">
+      WinDin is free, open-source software distributed under the MIT License.
+    </p>
+    <p style="color:rgba(255,255,255,0.25); font-size:0.75rem;">
+      Designed with liquid frosted glass & obsidian aesthetics for Windows 11. Zero telemetry, zero system emojis.
+    </p>
+  </footer>
+
+  <!-- Application Logic -->
+  <script src="js/app.js"></script>
+</body>
+</html>
