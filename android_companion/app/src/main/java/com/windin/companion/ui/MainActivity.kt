@@ -293,7 +293,7 @@ fun ContinuityTab(
             }
         }
 
-        // Send File / Photo Card (Bi-directional AirDrop)
+        // Send File / Photo Card (Bi-directional Win Drop)
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = WinDinCard),
@@ -648,7 +648,7 @@ fun RemoteDeckTab(status: ConnectionStatus) {
             }
         }
 
-        // Dynamic Island Dock Position Card
+        // WinDin Island Dock Position Card
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = WinDinCard),
@@ -664,7 +664,7 @@ fun RemoteDeckTab(status: ConnectionStatus) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Reposition the Dynamic Island on your desktop",
+                        text = "Reposition the WinDin Island on your desktop",
                         color = WinDinTextSecondary,
                         fontSize = 12.sp
                     )
@@ -849,7 +849,7 @@ fun SystemDiagnosticsTab(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (isCharging) "Charging • Synced to Dynamic Island" else "On Battery • Synced to Dynamic Island",
+                            text = if (isCharging) "Charging • Synced to WinDin Island" else "On Battery • Synced to WinDin Island",
                             color = WinDinTextSecondary,
                             fontSize = 12.sp
                         )
@@ -932,7 +932,7 @@ fun SystemDiagnosticsTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "WindowLand Dynamic Island",
+                        text = "WindowLand WinDin Island",
                         color = WinDinTextPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold

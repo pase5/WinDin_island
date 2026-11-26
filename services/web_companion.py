@@ -874,7 +874,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
     <!-- Active Island Badge -->
     <div class="sidebar-status">
       <div class="beacon-dot"></div>
-      <span id="sidebarStatusText">Dynamic Island Active</span>
+      <span id="sidebarStatusText">WinDin Island Active</span>
     </div>
   </aside>
 
@@ -1025,7 +1025,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
         <div class="notch-preview-stage" id="appearanceStage" style="height:140px;">
           <div class="preview-notch-pill" id="appearancePill" style="padding:8px 24px;">
             <div class="beacon-dot" id="prevBeacon" style="background:#10B981; box-shadow:0 0 10px #10B981;"></div>
-            <span style="font-weight:600; font-size:13px;" id="themeTrackTitle">Dynamic Island</span>
+            <span style="font-weight:600; font-size:13px;" id="themeTrackTitle">WinDin Island</span>
             <span style="font-weight:700; font-size:12.5px; margin-left:6px;" id="previewClockAppearance">19:<span id="previewMinuteAccent" style="color:#FFFFFF;">30</span></span>
             <div class="preview-equalizer">
               <div class="eq-bar" style="background:#FF43A8"></div>
@@ -1143,7 +1143,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
     <section id="tab-docking" class="tab-pane" style="display:none;">
       <div class="view-header">
         <h1 class="view-title">Position & Docking</h1>
-        <p class="view-subtitle">Choose how the Dynamic Island anchors to your screen bezels, corners, or taskbar.</p>
+        <p class="view-subtitle">Choose how the WinDin Island anchors to your screen bezels, corners, or taskbar.</p>
       </div>
 
       <div class="section-eyebrow">SCREEN DOCKING SELECTOR</div>
@@ -1206,7 +1206,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
 
       <div class="section-eyebrow">PHONE COMPANION DASHBOARD</div>
       <div class="glass-card">
-        <p style="font-size:12.5px; color:var(--text-secondary); margin-bottom:14px;">Connect your iPhone (iOS Shortcuts) or Android device to mirror live phone notifications, calls, and 2FA codes directly onto your Windows Dynamic Island.</p>
+        <p style="font-size:12.5px; color:var(--text-secondary); margin-bottom:14px;">Connect your iPhone (iOS Shortcuts) or Android device to mirror live phone notifications, calls, and 2FA codes directly onto your Windows WinDin Island.</p>
         <div style="background:var(--surface-well); border:1px solid var(--border-glass); border-radius:12px; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
           <div style="display:flex; align-items:center; gap:8px;">
             <div class="beacon-dot"></div>
@@ -1302,7 +1302,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
           </div>
           <button type="submit" class="btn-gradient" style="width:100%; padding:12px;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            <span>Send to Windows Dynamic Island</span>
+            <span>Send to Windows WinDin Island</span>
           </button>
         </form>
       </div>
@@ -1312,7 +1312,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
     <section id="tab-diagnostics" class="tab-pane" style="display:none;">
       <div class="view-header">
         <h1 class="view-title">Diagnostics & Live Simulator</h1>
-        <p class="view-subtitle">Test all Dynamic Island morph states, HUD overlays, accessory connection popups, and alerts.</p>
+        <p class="view-subtitle">Test all WinDin Island morph states, HUD overlays, accessory connection popups, and alerts.</p>
       </div>
 
       <div class="section-eyebrow">INTERACTIVE STATE SIMULATION DECK (9 STATES)</div>
@@ -1471,7 +1471,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
             </svg>
           </div>
           <div>
-            <div style="font-family:var(--font-heading); font-size:18px; font-weight:700;">WindowLand Dynamic Island</div>
+            <div style="font-family:var(--font-heading); font-size:18px; font-weight:700;">WindowLand WinDin Island</div>
             <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Apple-grade hardware notch & liquid multitasking overlay for Windows 11 / 10.</div>
             <div style="font-size:11px; color:#FF43A8; font-weight:600; margin-top:4px;">Version 2.0.0 • Windows 15 Fluent Architecture</div>
           </div>
@@ -1482,7 +1482,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
       <div class="glass-card">
         <div class="setting-row">
           <span style="background:rgba(255,255,255,0.08); border:1px solid var(--border-glass); padding:4px 10px; border-radius:6px; font-family:monospace; font-weight:600; font-size:12px;">Alt + Space</span>
-          <span class="row-desc" style="font-size:12.5px;">Expand or Collapse Dynamic Island from any application</span>
+          <span class="row-desc" style="font-size:12.5px;">Expand or Collapse WinDin Island from any application</span>
         </div>
         <div class="setting-row">
           <span style="background:rgba(255,255,255,0.08); border:1px solid var(--border-glass); padding:4px 10px; border-radius:6px; font-family:monospace; font-weight:600; font-size:12px;">Right Click</span>
@@ -1551,7 +1551,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
   async function triggerWake() {
     try {
       await fetch('/api/wake', { method: 'POST' });
-      showToast('Woke up Desktop Dynamic Island');
+      showToast('Woke up Desktop WinDin Island');
     } catch(e) {
       showToast('Wake signal sent');
     }
@@ -1856,7 +1856,7 @@ WEB_COMPANION_HTML = '''<!DOCTYPE html>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      showToast('Notification sent to Dynamic Island!');
+      showToast('Notification sent to WinDin Island!');
     } catch(err) {
       showToast('Delivery failed: Network error');
     }

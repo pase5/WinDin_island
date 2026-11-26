@@ -787,6 +787,12 @@ class DynamicIslandWidget(QWidget):
         self._last_phone_connect_toast_time = 0.0
         self._phone_disconnected_time = 0.0
         self._last_phone_low_battery_warn_time = 0.0
+        self._airdrop_proximity = False
+        self._corona_alpha = 0.0
+        self._corona_target_alpha = 0.0
+        self._corona_cursor_x = 170.0
+        self._corona_time = 0.0
+        self._is_collapsing_airdrop = False
 
         self._setup_window_flags()
 
@@ -1007,13 +1013,13 @@ class DynamicIslandWidget(QWidget):
 
         else:
             # Horizontal Dynamic Pill for Top / Bottom / Floating
-            if state == "compact":
-                if getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False):
-                    w = 340
-                    h = 36
-                else:
-                    w = COMPACT_MUSIC_WIDTH if has_media else COMPACT_IDLE_WIDTH
-                    h = COMPACT_HEIGHT
+            is_airdrop = getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False) or getattr(self, "_airdrop_proximity", False)
+            if is_airdrop and not getattr(self, "_is_collapsing_airdrop", False):
+                w = 340
+                h = 64
+            elif state == "compact":
+                w = COMPACT_MUSIC_WIDTH if has_media else COMPACT_IDLE_WIDTH
+                h = COMPACT_HEIGHT
             elif state == "toast":
                 w = TOAST_WIDTH
                 h = TOAST_HEIGHT
@@ -1200,8 +1206,17 @@ class DynamicIslandWidget(QWidget):
         if hasattr(self, "_expand_anim") and self._expand_anim and self._expand_anim.state() == QPropertyAnimation.State.Running:
             self._expand_anim.stop()
 
-        duration = 340 if state in ("expanded", "device_popup") else 280
-        easing = QEasingCurve.Type.OutQuart if state in ("expanded", "device_popup") else QEasingCurve.Type.OutCubic
+        is_airdrop = getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False) or getattr(self, "_airdrop_proximity", False)
+        if is_airdrop and not getattr(self, "_is_collapsing_airdrop", False):
+            duration = 320
+            easing = QEasingCurve(QEasingCurve.Type.OutBack)
+            easing.setOvershoot(1.2)
+        elif getattr(self, "_is_collapsing_airdrop", False):
+            duration = 260
+            easing = QEasingCurve(QEasingCurve.Type.OutQuad)
+        else:
+            duration = 340 if state in ("expanded", "device_popup") else 280
+            easing = QEasingCurve.Type.OutQuart if state in ("expanded", "device_popup") else QEasingCurve.Type.OutCubic
 
         start_geo = QRectF(self.geometry())
         end_geo = QRectF(x, y, w, h)
@@ -1243,8 +1258,8 @@ class DynamicIslandWidget(QWidget):
         ]
 
         p = self.get_expand_progress()
-        is_transfer = getattr(self, "_transfer_active", False)
-        if state == "expanded" and p >= 0.25 and not is_transfer:
+        is_airdrop = getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False) or getattr(self, "_airdrop_proximity", False)
+        if state == "expanded" and p >= 0.25 and not is_airdrop:
             for c in all_containers:
                 if c is not None:
                     if c is active_container:
@@ -2354,6 +2369,54 @@ class DynamicIslandWidget(QWidget):
 
         self._current_glow_opacity += (self._target_glow_opacity - self._current_glow_opacity) * lerp_factor
 
+        # Proximity AirDrop & Top-Edge Light Corona tracking (60 FPS)
+        try:
+            import ctypes
+            lbutton_down = bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
+            cur_pos = QCursor.pos()
+            screen = QGuiApplication.screenAt(cur_pos) or QGuiApplication.primaryScreen()
+            s_top = screen.geometry().top() if screen else 0
+
+            island_geo = self.geometry()
+            dist_y = cur_pos.y() - s_top
+            near_top = (0 <= dist_y <= 140)
+            near_island_x = (island_geo.left() - 140 <= cur_pos.x() <= island_geo.right() + 140)
+
+            proximity_active = (lbutton_down and near_top and near_island_x) or getattr(self, "_drag_hover", False)
+
+            target_cx = float(cur_pos.x() - island_geo.left())
+            self._corona_cursor_x += (target_cx - getattr(self, "_corona_cursor_x", target_cx)) * 0.25
+            self._corona_time += 0.04
+
+            if getattr(self, "_transfer_active", False):
+                if getattr(self, "_transfer_status", "idle") == "done":
+                    target_alpha = 0.0
+                else:
+                    target_alpha = 0.85
+            elif proximity_active:
+                target_alpha = 1.0
+            else:
+                target_alpha = 0.0
+
+            self._corona_alpha += (target_alpha - getattr(self, "_corona_alpha", 0.0)) * 0.16
+
+            was_proximity = getattr(self, "_airdrop_proximity", False)
+            self._airdrop_proximity = proximity_active
+
+            if proximity_active and not was_proximity and not getattr(self, "_transfer_active", False):
+                if self._island_state == "compact":
+                    self._apply_geometry_for_state(self._island_state, animate=True)
+            elif not proximity_active and was_proximity and not getattr(self, "_transfer_active", False) and not getattr(self, "_drag_hover", False):
+                if self._island_state == "compact":
+                    self._is_collapsing_airdrop = True
+                    self._apply_geometry_for_state(self._island_state, animate=True)
+                    QTimer.singleShot(280, lambda: setattr(self, "_is_collapsing_airdrop", False))
+
+            if self._corona_alpha > 0.005:
+                self.update()
+        except Exception:
+            pass
+
         if self._island_state == "compact" and self._media_info.get("is_playing", False):
             has_real_bands = False
             if hasattr(self, "system_service"):
@@ -2907,6 +2970,11 @@ class DynamicIslandWidget(QWidget):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
             self._drag_hover = True
+            try:
+                pos = event.position() if hasattr(event, "position") else event.pos()
+                self._corona_cursor_x = float(pos.x())
+            except Exception:
+                pass
             self._apply_geometry_for_state(self._island_state, animate=True)
             self.update()
         else:
@@ -2915,13 +2983,19 @@ class DynamicIslandWidget(QWidget):
     def dragMoveEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
+            try:
+                pos = event.position() if hasattr(event, "position") else event.pos()
+                self._corona_cursor_x = float(pos.x())
+            except Exception:
+                pass
+            self.update()
         else:
             super().dragMoveEvent(event)
 
     def dragLeaveEvent(self, event):
         self._drag_hover = False
-        self._apply_geometry_for_state(self._island_state, animate=True)
-        self.update()
+        self._airdrop_proximity = False
+        self._start_airdrop_collapse()
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event):
@@ -3148,45 +3222,44 @@ class DynamicIslandWidget(QWidget):
         try:
             self._transfer_progress = 1.0
             self._transfer_status = "done" if success else "failed"
-            if success:
-                self.set_glow_state("success", duration_sec=2.0)
+            self._corona_target_alpha = 0.0
             self.update()
-            # 1.2s completion state per DESIGN.md & spec, then 200ms smooth InOutQuad cross-fade
-            QTimer.singleShot(1200, self._start_transfer_fade_out)
+            # 1.0s completion hold (Ring-to-Checkmark), then smooth 260ms OutQuad retraction back to compact idle notch
+            QTimer.singleShot(1000, self._start_airdrop_collapse)
         except Exception:
-            pass
+            self._start_airdrop_collapse()
 
-    def _start_transfer_fade_out(self):
-        try:
-            self._transfer_fade_anim = QPropertyAnimation(self, b"transfer_fade")
-            self._transfer_fade_anim.setDuration(200)
-            self._transfer_fade_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            self._transfer_fade_anim.setStartValue(1.0)
-            self._transfer_fade_anim.setEndValue(0.0)
-            self._transfer_fade_anim.finished.connect(self._reset_transfer_state)
-            self._transfer_fade_anim.start()
-        except Exception:
-            self._reset_transfer_state()
-
-    def _reset_transfer_state(self):
+    def _start_airdrop_collapse(self):
         try:
             if hasattr(self, "_transfer_wave_timer"):
                 self._transfer_wave_timer.stop()
+            self._is_collapsing_airdrop = True
             self._transfer_active = False
+            self._drag_hover = False
+            self._airdrop_proximity = False
             self._transfer_status = "idle"
             self._transfer_progress = 0.0
             self._transfer_filename = ""
-            self._transfer_fade_val = 1.0
+            self._corona_target_alpha = 0.0
             self._update_child_visibility(self._island_state)
             self._apply_geometry_for_state(self._island_state, animate=True)
+            QTimer.singleShot(300, lambda: setattr(self, "_is_collapsing_airdrop", False))
             self.update()
         except Exception:
-            pass
+            try:
+                self._is_collapsing_airdrop = False
+            except Exception:
+                pass
 
     def _paint_drag_or_transfer(self, painter: QPainter, w: float, h: float):
         """
-        Renders live drag-hover dropzone or the 60 FPS Harmonic Wave Spectrum Loader.
-        Exclusively claims the canvas without clutter, perfectly styled to DESIGN.md and AGENTS.md.
+        Win Drop proximity & WinDin Island transfer sequence.
+        Authentic 3-column frosted card (340 x 64 px) with zero overlap:
+        - Left: 36 x 36 px squircle (r = 10 px) with crisp white vector smartphone glyph.
+        - Center: Two-line clean stack ('Win Drop' / '<Phone>' in 11 pt Bold #FFFFFF over 'Drop to Send' / elided filename in 9 pt 55% white).
+        - Right: 26 x 26 px circular progress ring (2.5 px stroke, 18% white track, sweeping pure white arc).
+        - Completion: White circle closes 100%, crisp pure white vector checkmark appears in center.
+        Zero emojis per AGENTS.md Rule 1. Pure obsidian & white palette (no green overlays).
         """
         try:
             painter.save()
@@ -3194,299 +3267,127 @@ class DynamicIslandWidget(QWidget):
             painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
 
-            fade_alpha = getattr(self, "_transfer_fade_val", 1.0)
-            painter.setOpacity(fade_alpha)
-
-            # ── 1. Drag Hover Dropzone State ─────────────────────────────
-            if getattr(self, "_drag_hover", False):
-                cx = w / 2.0 - 75.0
-                cy = h / 2.0
-                arrow_path = QPainterPath()
-                arrow_path.moveTo(cx, cy - 6.0)
-                arrow_path.lineTo(cx - 5.0, cy)
-                arrow_path.moveTo(cx, cy - 6.0)
-                arrow_path.lineTo(cx + 5.0, cy)
-                arrow_path.moveTo(cx, cy - 6.0)
-                arrow_path.lineTo(cx, cy + 6.0)
-
-                arrow_pen = QPen(QColor("#34C759"), 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
-                painter.setPen(arrow_pen)
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawPath(arrow_path)
-
-                painter.setFont(get_display_font(11.0))
-                painter.setPen(QColor("#34C759"))
-                painter.drawText(
-                    QRectF(cx + 14.0, 0, w - (cx + 14.0) - 10.0, h),
-                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                    "Drop to Send to Phone"
-                )
-                painter.restore()
-                return
-
-            if not getattr(self, "_transfer_active", False):
-                painter.restore()
-                return
-
-            # ── 2. Active Transfer Parameters ───────────────────────────
             prog = max(0.0, min(1.0, getattr(self, "_transfer_progress", 0.0)))
             status = getattr(self, "_transfer_status", "idle")
-            fname = getattr(self, "_transfer_filename", "File")
-            wave_t = getattr(self, "_wave_time", 0.0)
-            is_expanded = (self._island_state == "expanded") or (h >= 65.0)
+            fname = getattr(self, "_transfer_filename", "")
+            is_active_transfer = getattr(self, "_transfer_active", False)
+            device_name = getattr(self, "_phone_bridge_device", "") or "Win Drop"
 
-            # ─────────────────────────────────────────────────────────────
-            # A. EXPANDED CARD MODE (460 x 200 px)
-            # ─────────────────────────────────────────────────────────────
-            if is_expanded:
-                cx = w / 2.0
+            cy = h / 2.0  # 32.0 px
 
-                # 1. Top Category & Device Protocol Pill
-                cat_font = get_microlabel_font()
-                painter.setFont(cat_font)
-                fm_cat = painter.fontMetrics()
-                cat_text = "WINDIN CONTINUITY LINK"
-                cat_tw = fm_cat.horizontalAdvance(cat_text)
-                total_cat_w = cat_tw + 18.0
-                cat_x = cx - total_cat_w / 2.0
-                cat_y = 22.0
+            # ── 1. Left Column: Frosted Device Badge (36 x 36 px, r = 10 px) ──
+            badge_size = 36.0
+            badge_r = 10.0
+            badge_x = 18.0
+            badge_y = cy - badge_size / 2.0
+            badge_rect = QRectF(badge_x, badge_y, badge_size, badge_size)
 
-                # Micro phone vector glyph (Rule 1: Zero System Emojis)
-                phone_rect = QRectF(cat_x, cat_y + 1.0, 7.0, 11.0)
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QBrush(QColor(255, 255, 255, 160)))
-                painter.drawRoundedRect(phone_rect, 1.6, 1.6)
-                painter.setBrush(QBrush(QColor("#34C759")))
-                painter.drawEllipse(QPointF(cat_x + 5.2, cat_y + 3.0), 1.4, 1.4)
+            # Frosted glass background: rgba(255, 255, 255, 0.10)
+            painter.setPen(QPen(QColor(255, 255, 255, 36), 1.0))
+            painter.setBrush(QBrush(QColor(255, 255, 255, 25)))
+            painter.drawRoundedRect(badge_rect, badge_r, badge_r)
 
-                painter.setPen(QColor(161, 161, 170, 210))
-                painter.drawText(QRectF(cat_x + 11.0, cat_y, cat_tw + 4.0, 14.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, cat_text)
+            # Crisp white vector smartphone glyph (QPainterPath, zero emojis per AGENTS.md Rule 1)
+            phone_cx = badge_x + badge_size / 2.0
+            phone_cy = cy
+            pw = 13.0
+            ph = 21.0
+            pr = 2.8
+            phone_rect = QRectF(phone_cx - pw / 2.0, phone_cy - ph / 2.0, pw, ph)
 
-                # 2. Main Filename Title (Prominent White Demi-Bold)
-                title_font = get_display_font(13.0)
-                title_font.setWeight(QFont.Weight.DemiBold)
-                painter.setFont(title_font)
-                fm_title = painter.fontMetrics()
-                disp_fn = fm_title.elidedText(fname, Qt.TextElideMode.ElideMiddle, int(w - 70.0))
-                painter.setPen(QColor(255, 255, 255, 255))
-                painter.drawText(QRectF(35.0, 42.0, w - 70.0, 22.0), Qt.AlignmentFlag.AlignCenter, disp_fn)
+            painter.setPen(QPen(QColor(255, 255, 255, 235), 1.3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.setBrush(QBrush(QColor(255, 255, 255, 20)))
+            painter.drawRoundedRect(phone_rect, pr, pr)
 
-                # 3. Center Waveform Spectrum vs Completion Checkmark
-                center_y = 96.0
-                if status == "done":
-                    # Smoothly damped into crisp anti-aliased vector checkmark
-                    badge_r = 18.0
-                    badge_rect = QRectF(cx - badge_r, center_y - badge_r, badge_r * 2.0, badge_r * 2.0)
-                    glow = QRadialGradient(QPointF(cx, center_y), badge_r * 1.5)
-                    glow.setColorAt(0.0, QColor(52, 199, 89, 70))
-                    glow.setColorAt(0.6, QColor(52, 199, 89, 20))
-                    glow.setColorAt(1.0, QColor(0, 0, 0, 0))
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.setBrush(QBrush(glow))
-                    painter.drawEllipse(QRectF(cx - badge_r * 1.5, center_y - badge_r * 1.5, badge_r * 3.0, badge_r * 3.0))
+            # Notch / speaker slit at top of phone
+            painter.drawLine(QPointF(phone_cx - 2.5, phone_cy - 7.5), QPointF(phone_cx + 2.5, phone_cy - 7.5))
+            # Home bar at bottom
+            painter.drawLine(QPointF(phone_cx - 2.5, phone_cy + 7.5), QPointF(phone_cx + 2.5, phone_cy + 7.5))
 
-                    painter.setPen(QPen(QColor(52, 199, 89, 180), 1.2))
-                    painter.setBrush(QBrush(QColor(52, 199, 89, 45)))
-                    painter.drawEllipse(badge_rect)
+            # ── 2. Right Column: Circular Progress Ring & Checkmark (26 x 26 px) ──
+            ring_size = 26.0
+            ring_x = w - 18.0 - ring_size
+            ring_y = cy - ring_size / 2.0
+            rcx = ring_x + ring_size / 2.0
+            rcy = cy
+            stroke_w = 2.5
+            ring_rect = QRectF(ring_x + stroke_w / 2.0, ring_y + stroke_w / 2.0, ring_size - stroke_w, ring_size - stroke_w)
 
-                    chk = QPainterPath()
-                    chk.moveTo(cx - 7.0, center_y)
-                    chk.lineTo(cx - 2.0, center_y + 4.8)
-                    chk.lineTo(cx + 7.5, center_y - 4.8)
-                    painter.setPen(QPen(QColor("#34C759"), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    painter.drawPath(chk)
+            # Background track: 2.5 px stroke with rgba(255, 255, 255, 0.18)
+            track_pen = QPen(QColor(255, 255, 255, 46), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            painter.setPen(track_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(ring_rect)
 
-                elif status == "failed":
-                    badge_r = 18.0
-                    badge_rect = QRectF(cx - badge_r, center_y - badge_r, badge_r * 2.0, badge_r * 2.0)
-                    painter.setPen(QPen(QColor(239, 68, 68, 180), 1.2))
-                    painter.setBrush(QBrush(QColor(239, 68, 68, 45)))
-                    painter.drawEllipse(badge_rect)
-                    cross = QPainterPath()
-                    cross.moveTo(cx - 5.0, center_y - 5.0)
-                    cross.lineTo(cx + 5.0, center_y + 5.0)
-                    cross.moveTo(cx + 5.0, center_y - 5.0)
-                    cross.lineTo(cx - 5.0, center_y + 5.0)
-                    painter.setPen(QPen(QColor("#EF4444"), 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-                    painter.drawPath(cross)
+            if status == "done":
+                # Ring-to-Checkmark Completion: Close ring completely in pure white (#FFFFFF)
+                white_pen = QPen(QColor(255, 255, 255, 255), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+                painter.setPen(white_pen)
+                painter.drawEllipse(ring_rect)
 
+                # Crisp pure white vector checkmark centered inside ring
+                chk = QPainterPath()
+                chk.moveTo(rcx - 4.5, rcy)
+                chk.lineTo(rcx - 1.2, rcy + 3.8)
+                chk.lineTo(rcx + 5.0, rcy - 3.8)
+                chk_pen = QPen(QColor("#FFFFFF"), 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+                painter.setPen(chk_pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawPath(chk)
+
+            elif is_active_transfer:
+                if prog > 0.005:
+                    # Smooth pure white (#FFFFFF) sweeping progress arc (0° to 360°)
+                    sweep_angle = int(-prog * 360.0 * 16.0)
+                    prog_pen = QPen(QColor(255, 255, 255, 255), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+                    painter.setPen(prog_pen)
+                    painter.drawArc(ring_rect, 90 * 16, sweep_angle)
                 else:
-                    # 26-bar fluid harmonic equalizer wave
-                    num_bars = 26
-                    bar_w = 2.5
-                    bar_gap = 2.5
-                    total_wave_w = num_bars * bar_w + (num_bars - 1) * bar_gap  # 127.5 px
-                    start_x = cx - total_wave_w / 2.0
-
-                    speed_factor = min(1.0, max(0.25, getattr(self, "_transfer_speed", 0.5) * 0.7))
-                    painter.setPen(Qt.PenStyle.NoPen)
-
-                    for i in range(num_bars):
-                        x_norm = i / float(num_bars - 1)
-                        # Bell envelope: tapers smoothly towards edges, rich in center
-                        env = math.sin(math.pi * x_norm) ** 0.70
-                        # Sinusoidal / harmonic wave oscillation
-                        w1 = math.sin(wave_t * 3.8 + i * 0.44)
-                        w2 = 0.5 * math.cos(wave_t * 5.4 - i * 0.36)
-                        w3 = 0.3 * math.sin(wave_t * 2.2 + i * 0.82)
-                        raw = (w1 + w2 + w3 + 1.8) / 3.6
-                        raw = max(0.08, min(1.0, raw))
-
-                        bh = max(3.5, 36.0 * env * raw * (0.35 + 0.65 * speed_factor))
-                        bx = start_x + i * (bar_w + bar_gap)
-                        by = center_y - bh / 2.0
-
-                        # Emerald gradient tips rising from translucent white roots
-                        bar_grad = QLinearGradient(bx, by + bh, bx, by)
-                        bar_grad.setColorAt(0.0, QColor(255, 255, 255, 120))
-                        bar_grad.setColorAt(0.35, QColor(52, 199, 89, 210))
-                        bar_grad.setColorAt(1.0, QColor(163, 230, 53, 255))
-                        painter.setBrush(QBrush(bar_grad))
-                        painter.drawRoundedRect(QRectF(bx, by, bar_w, bh), 1.25, 1.25)
-
-                        # Floating specular peak cap
-                        cap_y = by - 1.8
-                        painter.setBrush(QBrush(QColor(255, 255, 255, 210)))
-                        painter.drawRoundedRect(QRectF(bx, cap_y, bar_w, 1.2), 0.6, 0.6)
-
-                # 4. Sleek Rounded Capsule Progress Bar
-                track_w = min(340.0, w - 80.0)
-                track_h = 6.0
-                track_x = (w - track_w) / 2.0
-                track_y = 136.0
-
-                # Track background: rgba(255, 255, 255, 0.14) per DESIGN.md Section 7
-                track_rect = QRectF(track_x, track_y, track_w, track_h)
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QBrush(QColor(255, 255, 255, 36)))
-                painter.drawRoundedRect(track_rect, 3.0, 3.0)
-
-                # Emerald Fill
-                fill_w = max(6.0, track_w * prog)
-                fill_rect = QRectF(track_x, track_y, fill_w, track_h)
-                fill_grad = QLinearGradient(track_x, track_y, track_x + fill_w, track_y)
-                fill_grad.setColorAt(0.0, QColor("#10B981"))
-                fill_grad.setColorAt(1.0, QColor("#34C759"))
-                painter.setBrush(QBrush(fill_grad))
-                painter.drawRoundedRect(fill_rect, 3.0, 3.0)
-
-                # Specular sheen on top half of fill capsule
-                sheen_path = QPainterPath()
-                sheen_path.addRoundedRect(QRectF(track_x + 1.0, track_y + 0.6, fill_w - 2.0, 2.2), 1.0, 1.0)
-                painter.setBrush(QBrush(QColor(255, 255, 255, 75)))
-                painter.drawPath(sheen_path)
-
-                # 5. Bottom Status Row
-                bot_font = get_subtext_font(10.0)
-                painter.setFont(bot_font)
-                if status == "done":
-                    sub_text = "Verified SHA-256 • Stored to MediaStore"
-                    sub_col = QColor("#34C759")
-                elif status == "failed":
-                    sub_text = "Transfer failed"
-                    sub_col = QColor("#EF4444")
-                else:
-                    sub_text = "Streaming chunks to Android companion..."
-                    sub_col = QColor(161, 161, 170, 220)
-
-                painter.setPen(sub_col)
-                painter.drawText(QRectF(track_x, 150.0, track_w * 0.7, 18.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, sub_text)
-
-                pct_font = get_display_font(11.0)
-                pct_font.setWeight(QFont.Weight.DemiBold)
-                painter.setFont(pct_font)
-                pct_str = f"{int(prog * 100)}%"
-                painter.setPen(QColor("#34C759"))
-                painter.drawText(QRectF(track_x + track_w * 0.7, 150.0, track_w * 0.3, 18.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, pct_str)
-
-            # ─────────────────────────────────────────────────────────────
-            # B. COMPACT PILL MODE (280 x 30 px)
-            # ─────────────────────────────────────────────────────────────
+                    # Initial pulse at 0%
+                    painter.setPen(QPen(QColor(255, 255, 255, 140), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+                    painter.drawArc(ring_rect, 90 * 16, -20 * 16)
             else:
-                morph = getattr(self, "_dock_morph", 1.0)
-                r_top = NOTCH_RADIUS_TOP * morph
-                content_left = r_top + 10.0
-                content_right = w - r_top - 10.0
+                # Proximity / Drag hover waiting state: subtle luminous breathing pulse
+                t_pulse = getattr(self, "_corona_time", 0.0)
+                pulse_angle = int((t_pulse * 140.0) % 360.0 * 16.0)
+                pulse_pen = QPen(QColor(255, 255, 255, 160), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+                painter.setPen(pulse_pen)
+                painter.drawArc(ring_rect, pulse_angle, 75 * 16)
 
-                # 1. Right: Tabular percentage in #34C759 emerald
-                pct_font = get_subtext_font(10.5)
-                pct_font.setWeight(QFont.Weight.DemiBold)
-                painter.setFont(pct_font)
-                fm_pct = painter.fontMetrics()
-                pct_str = f"{int(prog * 100)}%"
-                pct_w = fm_pct.horizontalAdvance(pct_str)
-                pct_rect = QRectF(content_right - pct_w, 0, pct_w, h)
-                painter.setPen(QColor("#34C759"))
-                painter.drawText(pct_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, pct_str)
+            # ── 3. Center Column: Two-Line Clean Stack ────────────────────
+            text_x = badge_x + badge_size + 13.0
+            text_right = ring_x - 12.0
+            avail_w = max(40.0, text_right - text_x)
 
-                # 2. Left: 6-bar mini harmonic spectrum wave vs checkmark
-                if status == "done":
-                    chk_cx = content_left + 8.0
-                    chk_cy = h / 2.0
-                    chk = QPainterPath()
-                    chk.moveTo(chk_cx - 4.5, chk_cy - 0.5)
-                    chk.lineTo(chk_cx - 1.0, chk_cy + 3.2)
-                    chk.lineTo(chk_cx + 5.0, chk_cy - 3.8)
-                    painter.setPen(QPen(QColor("#34C759"), 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    painter.drawPath(chk)
-                    text_start_x = content_left + 22.0
-                elif status == "failed":
-                    chk_cx = content_left + 8.0
-                    chk_cy = h / 2.0
-                    cross = QPainterPath()
-                    cross.moveTo(chk_cx - 3.5, chk_cy - 3.5)
-                    cross.lineTo(chk_cx + 3.5, chk_cy + 3.5)
-                    cross.moveTo(chk_cx + 3.5, chk_cy - 3.5)
-                    cross.lineTo(chk_cx - 3.5, chk_cy + 3.5)
-                    painter.setPen(QPen(QColor("#EF4444"), 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-                    painter.drawPath(cross)
-                    text_start_x = content_left + 22.0
+            # Top Line: "Win Drop" or "<Phone Name>" in 11 pt Bold #FFFFFF
+            top_font = get_display_font(11.0)
+            top_font.setWeight(QFont.Weight.Bold)
+            painter.setFont(top_font)
+            painter.setPen(QColor("#FFFFFF"))
+            fm_top = painter.fontMetrics()
+            top_str = fm_top.elidedText(device_name, Qt.TextElideMode.ElideRight, int(avail_w))
+            painter.drawText(QRectF(text_x, cy - 17.0, avail_w, 18.0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, top_str)
+
+            # Bottom Line: "Drop to Send" / Middle-elided filename in 9 pt rgba(255, 255, 255, 0.55)
+            bot_font = get_subtext_font(9.0)
+            painter.setFont(bot_font)
+            fm_bot = painter.fontMetrics()
+
+            if status == "done":
+                bot_str = "Sent"
+                painter.setPen(QColor(255, 255, 255, 220))
+            elif is_active_transfer:
+                if fname:
+                    raw_fn = f"Sending {fname}"
+                    bot_str = fm_bot.elidedText(raw_fn, Qt.TextElideMode.ElideMiddle, int(avail_w))
                 else:
-                    num_bars = 6
-                    bar_w = 2.0
-                    bar_gap = 2.0
-                    total_wave_w = num_bars * bar_w + (num_bars - 1) * bar_gap  # 22.0 px
-                    wave_x = content_left
-                    wave_cy = h / 2.0
-                    painter.setPen(Qt.PenStyle.NoPen)
+                    bot_str = f"Sending • {int(prog * 100)}%"
+                painter.setPen(QColor(255, 255, 255, 140))
+            else:
+                bot_str = "Drop to Send"
+                painter.setPen(QColor(255, 255, 255, 140))
 
-                    for i in range(num_bars):
-                        x_norm = i / float(num_bars - 1)
-                        env = math.sin(math.pi * (0.15 + 0.70 * x_norm))
-                        w1 = math.sin(wave_t * 4.2 + i * 0.78)
-                        w2 = 0.5 * math.cos(wave_t * 6.0 - i * 0.55)
-                        raw = (w1 + w2 + 1.5) / 3.0
-                        raw = max(0.12, min(1.0, raw))
-
-                        bh = max(3.0, 14.0 * env * raw)
-                        bx = wave_x + i * (bar_w + bar_gap)
-                        by = wave_cy - bh / 2.0
-
-                        bar_grad = QLinearGradient(bx, by + bh, bx, by)
-                        bar_grad.setColorAt(0.0, QColor(255, 255, 255, 140))
-                        bar_grad.setColorAt(1.0, QColor("#34C759"))
-                        painter.setBrush(QBrush(bar_grad))
-                        painter.drawRoundedRect(QRectF(bx, by, bar_w, bh), 1.0, 1.0)
-
-                    text_start_x = wave_x + total_wave_w + 10.0
-
-                # 3. Center: Clean elided filename
-                avail_w = max(10.0, (content_right - pct_w - 8.0) - text_start_x)
-                text_font = get_subtext_font(10.5)
-                painter.setFont(text_font)
-                fm_text = painter.fontMetrics()
-                prefix = "Sent " if status == "done" else "Sending "
-                full_title = f"{prefix}{fname}"
-                elided_title = fm_text.elidedText(full_title, Qt.TextElideMode.ElideMiddle, int(avail_w))
-
-                painter.setPen(QColor("#34C759") if status == "done" else QColor(255, 255, 255, 235))
-                painter.drawText(
-                    QRectF(text_start_x, 0, avail_w, h),
-                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                    elided_title
-                )
+            painter.drawText(QRectF(text_x, cy + 1.0, avail_w, 16.0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, bot_str)
 
             painter.restore()
         except Exception:
@@ -3863,6 +3764,32 @@ class DynamicIslandWidget(QWidget):
 
         notch_path = self._create_notch_path(w, h)
 
+        # 0. Top-Edge Luminous Light Corona (AirDrop Proximity & File Drag Bloom)
+        corona_alpha = getattr(self, "_corona_alpha", 0.0)
+        is_airdrop = getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False) or getattr(self, "_airdrop_proximity", False)
+        if corona_alpha > 0.005 or is_airdrop:
+            try:
+                bloom_val = max(corona_alpha, 0.45 if is_airdrop else 0.0)
+                cx = getattr(self, "_corona_cursor_x", w / 2.0)
+                cx = max(24.0, min(w - 24.0, cx))
+                t_cor = getattr(self, "_corona_time", 0.0)
+                pulse_r = math.sin(t_cor * 2.5) * 6.0
+
+                rad = max(80.0, min(240.0, w * 0.48)) + pulse_r
+                corona_grad = QRadialGradient(QPointF(cx, 0.0), rad)
+                corona_grad.setColorAt(0.0, QColor(255, 255, 255, int(85 * bloom_val)))
+                corona_grad.setColorAt(0.25, QColor(240, 248, 255, int(45 * bloom_val)))
+                corona_grad.setColorAt(0.65, QColor(220, 235, 255, int(15 * bloom_val)))
+                corona_grad.setColorAt(1.0, QColor(200, 225, 255, 0))
+
+                painter.save()
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(corona_grad))
+                painter.drawRect(QRectF(0, 0, w, h))
+                painter.restore()
+            except Exception:
+                pass
+
         # 1. Soft shadow along bottom and sides
         shadow_steps = 4
         for i in range(1, shadow_steps + 1):
@@ -3901,6 +3828,22 @@ class DynamicIslandWidget(QWidget):
                 self._cached_canvas_grad = canvas_grad
                 self._cached_canvas_grad_key = grad_key
             painter.fillRect(0, 0, int(w), int(h), self._cached_canvas_grad)
+
+        # 3.1 Radiant Inner Corona Bloom for AirDrop
+        if corona_alpha > 0.005 or is_airdrop:
+            try:
+                bloom_val = max(corona_alpha, 0.40 if is_airdrop else 0.0)
+                cx = getattr(self, "_corona_cursor_x", w / 2.0)
+                cx = max(24.0, min(w - 24.0, cx))
+                inner_rad = max(90.0, w * 0.52)
+                inner_corona = QRadialGradient(QPointF(cx, 0.0), inner_rad)
+                inner_corona.setColorAt(0.0, QColor(255, 255, 255, int(65 * bloom_val)))
+                inner_corona.setColorAt(0.30, QColor(240, 248, 255, int(32 * bloom_val)))
+                inner_corona.setColorAt(0.70, QColor(225, 238, 255, int(10 * bloom_val)))
+                inner_corona.setColorAt(1.0, QColor(200, 225, 255, 0))
+                painter.fillRect(QRectF(0, 0, w, h), QBrush(inner_corona))
+            except Exception:
+                pass
 
         # Ambient diffuse album art atmospheric glow when media is playing (Cached)
         ambient_on = getattr(self, "_ambient_enabled", True)
@@ -3946,7 +3889,7 @@ class DynamicIslandWidget(QWidget):
             painter.drawLine(QPointF(0, h - 0.75), QPointF(w, h - 0.75))
 
         # 5. State-Specific Content
-        if getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False):
+        if is_airdrop:
             self._paint_drag_or_transfer(painter, w, h)
         elif self._island_state == "toast":
             self._paint_toast_notch(painter, w, h)
@@ -3984,10 +3927,10 @@ class DynamicIslandWidget(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(notch_path)
 
-        # 8. Subtle Milled Edge Inner Highlight or Lime Drag Glow
-        if getattr(self, "_drag_hover", False):
-            lime_pen = QPen(QColor("#A3E635"), 2.0)
-            painter.setPen(lime_pen)
+        # 8. Milled Edge Highlight or Frosted Glass Contour Border
+        if is_airdrop:
+            frosted_pen = QPen(QColor(255, 255, 255, 41), 1.0)  # rgba(255, 255, 255, 0.16)
+            painter.setPen(frosted_pen)
             painter.drawPath(notch_path)
         else:
             highlight_alpha = 24 if self._hovered else 14
@@ -4169,7 +4112,7 @@ class DynamicIslandWidget(QWidget):
             painter.save()
             painter.setFont(get_subtext_font(8.5))
             painter.setPen(COLOR_TEXT_PRIMARY)
-            date_str = getattr(self, "_date_str", "Dynamic Island")
+            date_str = getattr(self, "_date_str", "WinDin Island")
             fm_d = QFontMetrics(painter.font())
             painter.drawText(QRectF(h_start_x, top_y_base + 4.0, h_arm_w, 13.0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, fm_d.elidedText(date_str, Qt.TextElideMode.ElideRight, int(h_arm_w)))
 
@@ -6479,7 +6422,7 @@ class DynamicIslandWidget(QWidget):
         # Header
         painter.setFont(get_subtext_font(9.5))
         painter.setPen(QColor(255, 255, 255, 180))
-        painter.drawText(QRectF(14.0, 16.0, w - 28.0, 16.0), Qt.AlignmentFlag.AlignCenter, "AIRDROP FILE SHELF")
+        painter.drawText(QRectF(14.0, 16.0, w - 28.0, 16.0), Qt.AlignmentFlag.AlignCenter, "WIN DROP FILE SHELF")
 
         # Square dashed drop zone
         drop_rect = QRectF(18.0, 38.0, w - 36.0, h - 86.0)
@@ -6586,7 +6529,7 @@ class DynamicIslandWidget(QWidget):
         f_head.setBold(True)
         painter.setFont(f_head)
         painter.setPen(QColor("#56CCF2"))
-        painter.drawText(QRectF(r_top + 14.0, 8.0, 200.0, 16.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "AIRDROP & FILE SHELF")
+        painter.drawText(QRectF(r_top + 14.0, 8.0, 200.0, 16.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "WIN DROP & FILE SHELF")
 
         # Clear Button
         clear_w = 52.0

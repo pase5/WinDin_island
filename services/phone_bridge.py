@@ -76,7 +76,7 @@ class PhoneBridgeHandler(BaseHTTPRequestHandler):
         elif path in ("/api/status", "/status"):
             res = json.dumps({
                 "status": "ok",
-                "app": "WindowLand Dynamic Island",
+                "app": "WindowLand WinDin Island",
                 "version": "2.0.0",
                 "ip": get_local_ip(),
                 "port": 54321

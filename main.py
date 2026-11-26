@@ -625,7 +625,7 @@ def main():
     tray_icon.activated.connect(on_tray_activated)
     tray_icon.show()
     tray_icon.showMessage(
-        "Dynamic Island Active",
+        "WinDin Island Active",
         "Running in background at top of screen. Press Alt+Space to expand.",
         QSystemTrayIcon.MessageIcon.Information,
         3000

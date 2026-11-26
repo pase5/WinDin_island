@@ -284,7 +284,7 @@ class SettingsWindow(QMainWindow):
         sb_lay.addStretch()
 
         # Subtle version footer
-        lbl_ver = QLabel("Dynamic Island v2.0", sidebar)
+        lbl_ver = QLabel("WinDin Island v2.0", sidebar)
         lbl_ver.setStyleSheet("font-size: 11px; color: #636366; padding-left: 6px; border: none; background: transparent;")
         sb_lay.addWidget(lbl_ver)
 
@@ -404,7 +404,7 @@ class SettingsWindow(QMainWindow):
 
     # ── Page 1: General ───────────────────────────────────────────
     def _build_general_page(self) -> QWidget:
-        page, lay = self._make_page("General", "Control Dynamic Island behavior and system startup.")
+        page, lay = self._make_page("General", "Control WinDin Island behavior and system startup.")
 
         c1, c1_lay = self._make_card("Quick Controls")
         self.btn_toggle_expand = self._make_btn("Toggle Expand", primary=True)
@@ -643,7 +643,7 @@ class SettingsWindow(QMainWindow):
 
     # ── Page 3: Position ──────────────────────────────────────────
     def _build_position_page(self) -> QWidget:
-        page, lay = self._make_page("Position & Docking", "Snap the Dynamic Island to any screen edge, corner, or float freely.")
+        page, lay = self._make_page("Position & Docking", "Snap the WinDin Island to any screen edge, corner, or float freely.")
 
         c1, c1_lay = self._make_card("Screen Bezel Map")
         grid_frame = QFrame()
@@ -709,7 +709,7 @@ class SettingsWindow(QMainWindow):
         self.cmb_screen.currentIndexChanged.connect(self._on_screen_changed)
         c2_lay.addWidget(self._make_row(
             "Active Display",
-            "Choose which monitor hosts the Dynamic Island.",
+            "Choose which monitor hosts the WinDin Island.",
             self.cmb_screen
         ))
         lay.addWidget(c2)
@@ -968,7 +968,7 @@ class SettingsWindow(QMainWindow):
         if self.island and hasattr(self.island, "open_qr_pairing_modal"):
             self.island.open_qr_pairing_modal()
         else:
-            QMessageBox.information(self, "WinDin-Link", "Start WindowLand Dynamic Island to pair a phone.")
+            QMessageBox.information(self, "WinDin-Link", "Start WindowLand WinDin Island to pair a phone.")
 
     def _sim_call(self, kind: str):
         if kind == "osd" and self.island:
@@ -978,7 +978,7 @@ class SettingsWindow(QMainWindow):
         elif kind == "otp" and self.island:
             self.island.trigger_otp("482 910", "Messages")
         elif kind == "notif_toast" and self.system_service:
-            self.system_service.trigger_test_notification("Notification", "System Alert", "WindowLand Dynamic Island is active.")
+            self.system_service.trigger_test_notification("Notification", "System Alert", "WindowLand WinDin Island is active.")
         elif kind == "demo_music" and self.media_service:
             self.media_service.toggle_mock_mode()
         elif kind == "airpods" and self.device_service:
@@ -997,7 +997,7 @@ class SettingsWindow(QMainWindow):
         reply = QMessageBox.question(
             self,
             "Quit WindowLand",
-            "Are you sure you want to quit WindowLand Dynamic Island?",
+            "Are you sure you want to quit WindowLand WinDin Island?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:

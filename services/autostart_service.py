@@ -70,7 +70,7 @@ sLinkFile = "{lnk_path}"
 Set oLink = oWS.CreateShortcut(sLinkFile)
 oLink.TargetPath = "{exe_path}"
 oLink.WorkingDirectory = "{work_dir}"
-oLink.Description = "Dynamic Island Hardware Notch Desktop Overlay"
+oLink.Description = "WinDin Island Hardware Notch Desktop Overlay"
 oLink.Save
 '''
         temp_vbs = os.path.join(tempfile.gettempdir(), "create_dynamic_island_sc.vbs")
