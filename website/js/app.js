@@ -10,6 +10,9 @@ document.addEventListener("DOMContentLoaded", () => {
   initClock();
   initSimulator();
   initBentoDocking();
+  initSpotlight();
+  initScrollReveal();
+  initNavScroll();
   fetchGitHubReleases();
 });
 
@@ -56,17 +59,13 @@ function initSimulator() {
   let scrubberInterval = null;
   let scrubberPercent = 42;
 
-  // View Switcher Function
+  // View Switcher Function — Driven by Pure Hardware-Accelerated CSS Transitions
   function setSimulatorState(state) {
     if (isTransferring && state !== "windrop") return;
     currentState = state;
 
     notch.classList.remove("state-compact", "state-expanded", "state-windrop");
     notch.classList.add(`state-${state}`);
-
-    if (viewCompact) viewCompact.style.display = state === "compact" ? "flex" : "none";
-    if (viewExpanded) viewExpanded.style.display = state === "expanded" ? "flex" : "none";
-    if (viewWindrop) viewWindrop.style.display = state === "windrop" ? "flex" : "none";
   }
 
   // Hover & Click Interactions
@@ -90,7 +89,37 @@ function initSimulator() {
     }
   });
 
-  // Media Player Controls
+  // Media Player Tracks & Controls
+  const TRACKS = [
+    { title: "WindowLand Dreams", artist: "WinDin Hi-Fi Audio" },
+    { title: "Obsidian Horizon", artist: "Lossless 24-bit/96kHz" },
+    { title: "Subpixel Velocity", artist: "Liquid Dynamic Notch" }
+  ];
+  let currentTrackIdx = 0;
+  const trackTitleEl = document.querySelector(".exp-track-title");
+  const trackArtistEl = document.querySelector(".exp-track-artist");
+
+  const prevBtn = document.querySelector('.ctrl-btn[aria-label="Previous Track"]');
+  const nextBtn = document.querySelector('.ctrl-btn[aria-label="Next Track"]');
+
+  function switchTrack(direction) {
+    currentTrackIdx = (currentTrackIdx + direction + TRACKS.length) % TRACKS.length;
+    const track = TRACKS[currentTrackIdx];
+    if (trackTitleEl && trackArtistEl) {
+      trackTitleEl.style.opacity = "0";
+      trackArtistEl.style.opacity = "0";
+      setTimeout(() => {
+        trackTitleEl.textContent = track.title;
+        trackArtistEl.textContent = track.artist;
+        trackTitleEl.style.opacity = "1";
+        trackArtistEl.style.opacity = "1";
+      }, 150);
+    }
+  }
+
+  if (prevBtn) prevBtn.addEventListener("click", (e) => { e.stopPropagation(); switchTrack(-1); });
+  if (nextBtn) nextBtn.addEventListener("click", (e) => { e.stopPropagation(); switchTrack(1); });
+
   if (playBtn) {
     playBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -115,6 +144,22 @@ function initSimulator() {
     });
   }
 
+  // Interactive Click-to-Seek Scrubber
+  const scrubberTrack = document.querySelector(".scrubber-bar-track");
+  if (scrubberTrack) {
+    scrubberTrack.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const rect = scrubberTrack.getBoundingClientRect();
+      const clickX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+      scrubberPercent = (clickX / rect.width) * 100;
+      if (scrubberProgress) scrubberProgress.style.width = `${scrubberPercent}%`;
+      const totalSec = Math.floor((scrubberPercent / 100) * 225);
+      const m = Math.floor(totalSec / 60);
+      const s = String(totalSec % 60).padStart(2, "0");
+      if (currentTimeEl) currentTimeEl.textContent = `0${m}:${s}`;
+    });
+  }
+
   function startScrubber() {
     stopScrubber();
     scrubberInterval = setInterval(() => {
@@ -133,7 +178,7 @@ function initSimulator() {
 
   startScrubber();
 
-  // ── Drag & Drop Win Drop Experience ─────────────────────────────────────
+  // ── Drag & Drop Win Drop Experience with Cursor-Tracking Corona Bloom ───
   if (dragPill) {
     dragPill.addEventListener("dragstart", (e) => {
       e.dataTransfer.setData("text/plain", "screenshot_2026.png");
@@ -143,7 +188,10 @@ function initSimulator() {
 
     dragPill.addEventListener("dragend", () => {
       if (!isTransferring) {
-        if (corona) corona.classList.remove("active");
+        if (corona) {
+          corona.classList.remove("active");
+          corona.style.left = "50%";
+        }
         setSimulatorState("compact");
       }
     });
@@ -153,7 +201,12 @@ function initSimulator() {
     stage.addEventListener("dragover", (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
-      if (corona) corona.classList.add("active");
+      if (corona) {
+        corona.classList.add("active");
+        const rect = stage.getBoundingClientRect();
+        const relX = Math.max(80, Math.min(rect.width - 80, e.clientX - rect.left));
+        corona.style.left = `${relX}px`;
+      }
       if (!isTransferring && currentState !== "windrop") {
         setSimulatorState("windrop");
         if (dropSub) dropSub.textContent = "Drop to Send";
@@ -164,13 +217,17 @@ function initSimulator() {
 
     stage.addEventListener("dragleave", (e) => {
       if (!stage.contains(e.relatedTarget) && !isTransferring) {
-        if (corona) corona.classList.remove("active");
+        if (corona) {
+          corona.classList.remove("active");
+          corona.style.left = "50%";
+        }
         setSimulatorState("compact");
       }
     });
 
     stage.addEventListener("drop", (e) => {
       e.preventDefault();
+      if (corona) corona.style.left = "50%";
       triggerWinDropTransfer("screenshot_2026.png");
     });
   }
@@ -206,7 +263,10 @@ function initSimulator() {
         if (dropSub) dropSub.textContent = `Sent ${filename}`;
         if (ringProg) ringProg.style.strokeDashoffset = "0";
         if (checkmark) checkmark.classList.add("show");
-        if (corona) corona.classList.remove("active");
+        if (corona) {
+          corona.classList.remove("active");
+          corona.style.left = "50%";
+        }
 
         // Retract back after 1.4s hold
         setTimeout(() => {
@@ -229,7 +289,73 @@ function initBentoDocking() {
       pills.forEach((p) => p.classList.remove("active"));
       pill.classList.add("active");
     });
+    pill.addEventListener("click", () => {
+      pills.forEach((p) => p.classList.remove("active"));
+      pill.classList.add("active");
+    });
   });
+}
+
+/* ── 4. Spotlight Cursor Follower Physics ───────────────────────────────── */
+function initSpotlight() {
+  const cards = document.querySelectorAll(".bento-card, .download-card, .step-card");
+  if (!cards.length) return;
+
+  cards.forEach((card) => {
+    card.addEventListener("pointermove", (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      card.style.setProperty("--mouse-x", `${x}px`);
+      card.style.setProperty("--mouse-y", `${y}px`);
+    }, { passive: true });
+  });
+}
+
+/* ── 5. High-Performance Scroll Reveal Observer ────────────────────────── */
+function initScrollReveal() {
+  const elements = document.querySelectorAll(".reveal-on-scroll");
+  if (!elements.length) return;
+
+  if (!("IntersectionObserver" in window)) {
+    elements.forEach((el) => el.classList.add("revealed"));
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("revealed");
+        obs.unobserve(entry.target);
+      }
+    });
+  }, {
+    rootMargin: "0px 0px -40px 0px",
+    threshold: 0.1
+  });
+
+  elements.forEach((el) => observer.observe(el));
+}
+
+/* ── 6. Scroll-Aware Frosted Navigation Bar ────────────────────────────── */
+function initNavScroll() {
+  const nav = document.querySelector(".site-nav");
+  if (!nav) return;
+
+  let ticking = false;
+  window.addEventListener("scroll", () => {
+    if (!ticking) {
+      window.requestAnimationFrame(() => {
+        if (window.scrollY > 24) {
+          nav.classList.add("scrolled");
+        } else {
+          nav.classList.remove("scrolled");
+        }
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }, { passive: true });
 }
 
 /* ── 4. Automatic GitHub Releases Hub ───────────────────────────────────── */
