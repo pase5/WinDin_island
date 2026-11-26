@@ -3,7 +3,7 @@
 # WinDin — Dynamic Island & Win Drop for Windows
 ### Liquid Hardware Notch, 26-Band WASAPI Spectrum & Zero-Cloud Mobile Continuity
 
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20%26%20Android%208.0%2B-0078D6?style=for-the-badge&logo=windows)](https://github.com/pase5/WinDin)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20%26%20Android%208.0%2B-0078D6?style=for-the-badge&logo=windows)](https://github.com/pase5/WinDin_island)
 [![License](https://img.shields.io/badge/License-MIT-34C759?style=for-the-badge)](#)
 [![Animation](https://img.shields.io/badge/Physics-60%20FPS%20B%C3%A9zier-FF9500?style=for-the-badge)](#)
 [![Binary Windows](https://img.shields.io/badge/Binary%20Windows-50.2%20MB%20Standalone-0078D6?style=for-the-badge)](#)
@@ -111,11 +111,11 @@ The repository includes a companion mobile application built with **Kotlin & Jet
 ### Pre-Compiled Standalone Binaries (Recommended)
 
 1. **Windows 11 / 10:**
-   - Download [`DynamicIsland.exe`](https://github.com/pase5/WinDin/releases/latest) (~50.2 MB, strictly under 100 MB budget).
+   - Download [`DynamicIsland.exe`](https://github.com/pase5/WinDin_island/releases/latest) (~50.2 MB, strictly under 100 MB budget).
    - Run `DynamicIsland.exe` — the notch anchors automatically to the top center of your display.
    - *SmartScreen note:* If prompted with "Windows protected your PC", click **More info &rarr; Run anyway**. WinDin is standalone and open-source.
 2. **Android Companion:**
-   - Download [`WinDin.apk`](https://github.com/pase5/WinDin/releases/latest) (~39.5 MB).
+   - Download [`WinDin.apk`](https://github.com/pase5/WinDin_island/releases/latest) (~39.5 MB).
    - Install the APK on your Android device (Android 8.0+, enable *Install unknown apps*).
    - Scan the pairing QR code displayed in the desktop island to connect instantly.
 
@@ -131,8 +131,8 @@ The repository includes a companion mobile application built with **Kotlin & Jet
 ### 1. Running the Windows App from Source
 ```powershell
 # Clone the repository
-git clone https://github.com/pase5/WinDin.git
-cd WinDin
+git clone https://github.com/pase5/WinDin_island.git
+cd WinDin_island
 
 # Create virtual environment & install dependencies
 python -m venv venv

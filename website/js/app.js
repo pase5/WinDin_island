@@ -4,7 +4,7 @@
  */
 
 // ── GitHub Repository Configuration ──────────────────────────────────────
-const GITHUB_REPO = "pase5/WinDin";
+const GITHUB_REPO = "pase5/WinDin_island";
 
 document.addEventListener("DOMContentLoaded", () => {
   initClock();
