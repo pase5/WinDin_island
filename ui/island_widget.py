@@ -572,6 +572,56 @@ class VectorMediaButton(QPushButton):
                 painter.drawPath(tri)
 
 
+class AirDropOverlayWidget(QWidget):
+    """
+    Frosted glass overlay layer displayed over the Dynamic Island (and over the expanded
+    music player) during file drag, AirDrop proximity, or active Win Drop transfer.
+    Sits above dashboard_container in Qt Z-order to eliminate any control collision.
+    """
+    def __init__(self, parent: "DynamicIslandWidget"):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setAcceptDrops(True)
+        self.hide()
+
+    def dragEnterEvent(self, event):
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "dragEnterEvent"):
+            parent.dragEnterEvent(event)
+        else:
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "dragMoveEvent"):
+            parent.dragMoveEvent(event)
+        else:
+            event.acceptProposedAction()
+
+    def dragLeaveEvent(self, event):
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "dragLeaveEvent"):
+            parent.dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "dropEvent"):
+            parent.dropEvent(event)
+
+    def paintEvent(self, event):
+        try:
+            parent = self.parent()
+            if parent is not None and hasattr(parent, "_paint_drag_or_transfer"):
+                painter = QPainter(self)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+                painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+                parent._paint_drag_or_transfer(painter, float(self.width()), float(self.height()))
+                painter.end()
+        except Exception:
+            pass
+
+
 class DynamicIslandWidget(QWidget):
     """
     Curvy hardware notch desktop overlay with moving gradient effect,
@@ -1014,7 +1064,10 @@ class DynamicIslandWidget(QWidget):
         else:
             # Horizontal Dynamic Pill for Top / Bottom / Floating
             is_airdrop = getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False) or getattr(self, "_airdrop_proximity", False)
-            if is_airdrop and not getattr(self, "_is_collapsing_airdrop", False):
+            if state == "expanded":
+                w = EXPANDED_WIDTH
+                h = EXPANDED_HEIGHT
+            elif is_airdrop and not getattr(self, "_is_collapsing_airdrop", False):
                 w = 340
                 h = 64
             elif state == "compact":
@@ -1110,15 +1163,68 @@ class DynamicIslandWidget(QWidget):
     def get_expand_progress(self) -> float:
         return getattr(self, "_expand_progress_val", 0.0)
 
+    def _update_airdrop_state(self):
+        is_airdrop = getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False) or getattr(self, "_airdrop_proximity", False)
+        collapsing = getattr(self, "_is_collapsing_airdrop", False)
+
+        p = self.get_expand_progress()
+        if is_airdrop and not collapsing:
+            cont_op = 0.55 if self._island_state == "expanded" else 0.0
+        else:
+            cont_op = max(0.0, min(1.0, (p - 0.25) / 0.75))
+            if getattr(self, "_transfer_active", False):
+                cont_op *= (1.0 - getattr(self, "_transfer_fade_val", 1.0))
+
+        for eff in (getattr(self, "_dashboard_opacity_effect", None),
+                    getattr(self, "_side_opacity_effect", None),
+                    getattr(self, "_corner_opacity_effect", None)):
+            if eff is not None:
+                eff.setOpacity(cont_op)
+
+        for c in (getattr(self, "dashboard_container", None),
+                  getattr(self, "dashboard_container_side", None),
+                  getattr(self, "dashboard_container_corner", None)):
+            if c is not None:
+                c.setEnabled(not is_airdrop)
+
+        # Smoothly hide timeline scrubber and time labels during AirDrop so no line cuts through writing
+        is_airdrop_active = is_airdrop and not collapsing
+        for sc in (getattr(self, "timeline_scrubber", None),
+                   getattr(self, "timeline_scrubber_side", None),
+                   getattr(self, "timeline_scrubber_corner", None)):
+            if sc is not None:
+                sc.setVisible(not is_airdrop_active)
+
+        for lbl in (getattr(self, "lbl_time_pos", None), getattr(self, "lbl_time_dur", None),
+                    getattr(self, "lbl_time_pos_side", None), getattr(self, "lbl_time_dur_side", None),
+                    getattr(self, "lbl_time_pos_corner", None), getattr(self, "lbl_time_dur_corner", None)):
+            if lbl is not None:
+                lbl.setVisible(not is_airdrop_active)
+
+        if hasattr(self, "airdrop_overlay") and self.airdrop_overlay is not None:
+            if is_airdrop and not collapsing:
+                self.airdrop_overlay.setGeometry(0, 0, self.width(), self.height())
+                self.airdrop_overlay.show()
+                self.airdrop_overlay.raise_()
+                self.airdrop_overlay.update()
+            else:
+                self.airdrop_overlay.hide()
+
+        self.update()
+
     def set_expand_progress(self, val: float):
         self._expand_progress_val = max(0.0, min(1.0, float(val)))
         p = self._expand_progress_val
 
-        # Smooth cross-fade active child container from p=0.25 to 1.0
-        cont_op = max(0.0, min(1.0, (p - 0.25) / 0.75))
-        is_transfer = getattr(self, "_transfer_active", False)
-        if is_transfer:
-            cont_op *= (1.0 - getattr(self, "_transfer_fade_val", 1.0))
+        is_airdrop = getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False) or getattr(self, "_airdrop_proximity", False)
+        collapsing = getattr(self, "_is_collapsing_airdrop", False)
+
+        if is_airdrop and not collapsing:
+            cont_op = 0.55 if self._island_state == "expanded" else 0.0
+        else:
+            cont_op = max(0.0, min(1.0, (p - 0.25) / 0.75))
+            if getattr(self, "_transfer_active", False):
+                cont_op *= (1.0 - getattr(self, "_transfer_fade_val", 1.0))
 
         for eff in (getattr(self, "_dashboard_opacity_effect", None),
                     getattr(self, "_side_opacity_effect", None),
@@ -1133,14 +1239,24 @@ class DynamicIslandWidget(QWidget):
             getattr(self, "dashboard_container_side", None) if is_side else getattr(self, "dashboard_container", None)
         )
         if active_c is not None:
-            if is_transfer and getattr(self, "_transfer_fade_val", 1.0) >= 0.99:
+            active_c.setEnabled(not is_airdrop)
+            if is_airdrop and self._island_state != "expanded":
                 if active_c.isVisible():
                     active_c.hide()
-            elif p >= 0.25 and not active_c.isVisible() and not (is_transfer and getattr(self, "_transfer_fade_val", 1.0) >= 0.99):
+            elif p >= 0.25 and not active_c.isVisible():
                 active_c.show()
                 active_c.raise_()
             elif p < 0.25 and active_c.isVisible():
                 active_c.hide()
+
+        if hasattr(self, "airdrop_overlay") and self.airdrop_overlay is not None:
+            if is_airdrop and not collapsing:
+                self.airdrop_overlay.setGeometry(0, 0, self.width(), self.height())
+                self.airdrop_overlay.show()
+                self.airdrop_overlay.raise_()
+                self.airdrop_overlay.update()
+            else:
+                self.airdrop_overlay.hide()
 
         self.update()
 
@@ -1259,18 +1375,21 @@ class DynamicIslandWidget(QWidget):
 
         p = self.get_expand_progress()
         is_airdrop = getattr(self, "_drag_hover", False) or getattr(self, "_transfer_active", False) or getattr(self, "_airdrop_proximity", False)
-        if state == "expanded" and p >= 0.25 and not is_airdrop:
+        if state == "expanded" and p >= 0.25:
             for c in all_containers:
                 if c is not None:
                     if c is active_container:
                         c.show()
                         c.raise_()
+                        c.setEnabled(not is_airdrop)
                     else:
                         c.hide()
         else:
             for c in all_containers:
                 if c is not None:
                     c.hide()
+
+        self._update_airdrop_state()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -1280,6 +1399,9 @@ class DynamicIslandWidget(QWidget):
 
         w = float(self.width())
         h = float(self.height())
+
+        if hasattr(self, "airdrop_overlay") and self.airdrop_overlay is not None:
+            self.airdrop_overlay.setGeometry(0, 0, int(w), int(h))
 
         if is_corner:
             c = getattr(self, "dashboard_container_corner", None)
@@ -2073,6 +2195,9 @@ class DynamicIslandWidget(QWidget):
         ctrls_corner.addStretch()
         corner_layout.addLayout(ctrls_corner)
 
+        # Frosted AirDrop / Win Drop Overlay Widget (sits above dashboard containers to eliminate overlap)
+        self.airdrop_overlay = AirDropOverlayWidget(self)
+
         # Install drag filters on child containers so dragging while expanded is fully responsive
         self._setup_child_drag_filters()
 
@@ -2402,6 +2527,9 @@ class DynamicIslandWidget(QWidget):
 
             was_proximity = getattr(self, "_airdrop_proximity", False)
             self._airdrop_proximity = proximity_active
+
+            if proximity_active != was_proximity:
+                self._update_airdrop_state()
 
             if proximity_active and not was_proximity and not getattr(self, "_transfer_active", False):
                 if self._island_state == "compact":
@@ -2975,7 +3103,9 @@ class DynamicIslandWidget(QWidget):
                 self._corona_cursor_x = float(pos.x())
             except Exception:
                 pass
-            self._apply_geometry_for_state(self._island_state, animate=True)
+            self._update_airdrop_state()
+            if self._island_state == "compact":
+                self._apply_geometry_for_state(self._island_state, animate=True)
             self.update()
         else:
             super().dragEnterEvent(event)
@@ -2988,6 +3118,8 @@ class DynamicIslandWidget(QWidget):
                 self._corona_cursor_x = float(pos.x())
             except Exception:
                 pass
+            if hasattr(self, "airdrop_overlay") and self.airdrop_overlay and self.airdrop_overlay.isVisible():
+                self.airdrop_overlay.update()
             self.update()
         else:
             super().dragMoveEvent(event)
@@ -3031,8 +3163,10 @@ class DynamicIslandWidget(QWidget):
             self._last_prog_time = time.time()
             if hasattr(self, "_transfer_wave_timer"):
                 self._transfer_wave_timer.start(16)
+            self._update_airdrop_state()
             self._update_child_visibility(self._island_state)
-            self._apply_geometry_for_state(self._island_state, animate=True)
+            if self._island_state == "compact":
+                self._apply_geometry_for_state(self._island_state, animate=True)
             self.update()
 
             def on_prog(p: float):
@@ -3131,6 +3265,7 @@ class DynamicIslandWidget(QWidget):
             self._wave_time = 0.0
             if hasattr(self, "_transfer_wave_timer") and not self._transfer_wave_timer.isActive():
                 self._transfer_wave_timer.start(16)
+            self._update_airdrop_state()
             self.set_island_state("expanded")
             self._update_child_visibility("expanded")
             self.set_glow_state("notification", duration_sec=3.0)
@@ -3241,8 +3376,10 @@ class DynamicIslandWidget(QWidget):
             self._transfer_progress = 0.0
             self._transfer_filename = ""
             self._corona_target_alpha = 0.0
+            self._update_airdrop_state()
             self._update_child_visibility(self._island_state)
-            self._apply_geometry_for_state(self._island_state, animate=True)
+            if self._island_state == "compact":
+                self._apply_geometry_for_state(self._island_state, animate=True)
             QTimer.singleShot(300, lambda: setattr(self, "_is_collapsing_airdrop", False))
             self.update()
         except Exception:
@@ -3254,12 +3391,14 @@ class DynamicIslandWidget(QWidget):
     def _paint_drag_or_transfer(self, painter: QPainter, w: float, h: float):
         """
         Win Drop proximity & WinDin Island transfer sequence.
-        Authentic 3-column frosted card (340 x 64 px) with zero overlap:
-        - Left: 36 x 36 px squircle (r = 10 px) with crisp white vector smartphone glyph.
-        - Center: Two-line clean stack ('Win Drop' / '<Phone>' in 11 pt Bold #FFFFFF over 'Drop to Send' / elided filename in 9 pt 55% white).
-        - Right: 26 x 26 px circular progress ring (2.5 px stroke, 18% white track, sweeping pure white arc).
-        - Completion: White circle closes 100%, crisp pure white vector checkmark appears in center.
-        Zero emojis per AGENTS.md Rule 1. Pure obsidian & white palette (no green overlays).
+        Authentic frosted obsidian interface with zero overlap:
+        - When expanded (h > 70 px):
+          Renders a full frosted obsidian glass scrim over the music player with soft
+          translucent depth, and floats an elevated frosted capsule card (360 x 66 px)
+          in the center with 3-column layout (Left: phone badge, Center: text stack, Right: progress ring).
+        - When compact (h <= 70 px):
+          Renders the 3-column frosted layout directly inside the 340 x 64 px compact notch.
+        Zero emojis per AGENTS.md Rule 1. Pure obsidian & white vector palette.
         """
         try:
             painter.save()
@@ -3273,61 +3412,140 @@ class DynamicIslandWidget(QWidget):
             is_active_transfer = getattr(self, "_transfer_active", False)
             device_name = getattr(self, "_phone_bridge_device", "") or "Win Drop"
 
-            cy = h / 2.0  # 32.0 px
+            notch_path = self._create_notch_path(w, h)
+            painter.setClipPath(notch_path)
 
-            # ── 1. Left Column: Frosted Device Badge (36 x 36 px, r = 10 px) ──
-            badge_size = 36.0
-            badge_r = 10.0
-            badge_x = 18.0
-            badge_y = cy - badge_size / 2.0
+            is_expanded_mode = (h > 70.0)
+
+            if is_expanded_mode:
+                # ── Frosted Glass Scrim Layer over Music Player ────────────
+                # Translucent frosted veil so music player is clearly visible underneath
+                scrim_grad = QLinearGradient(0, 0, 0, h)
+                scrim_grad.setColorAt(0.0, QColor(8, 10, 16, 120))
+                scrim_grad.setColorAt(0.5, QColor(6, 8, 14, 140))
+                scrim_grad.setColorAt(1.0, QColor(2, 4, 10, 160))
+                painter.fillRect(QRectF(0, 0, w, h), scrim_grad)
+
+                # Frosted glass specular reflection sheen
+                frost_sheen = QLinearGradient(0, 0, w, h)
+                frost_sheen.setColorAt(0.0, QColor(255, 255, 255, 28))
+                frost_sheen.setColorAt(0.35, QColor(255, 255, 255, 12))
+                frost_sheen.setColorAt(0.7, QColor(255, 255, 255, 6))
+                frost_sheen.setColorAt(1.0, QColor(255, 255, 255, 20))
+                painter.fillRect(QRectF(0, 0, w, h), frost_sheen)
+
+                # Frosted specular highlight along the top notch contour
+                painter.setPen(QPen(QColor(255, 255, 255, 45), 1.0))
+                painter.drawLine(QPointF(0, 1.0), QPointF(w, 1.0))
+
+                # Subtle ambient backlight radial glow behind the floating card
+                glow_rad = QRadialGradient(QPointF(w / 2.0, h / 2.0), max(120.0, w * 0.45))
+                glow_rad.setColorAt(0.0, QColor(255, 255, 255, 22))
+                glow_rad.setColorAt(0.65, QColor(100, 140, 255, 8))
+                glow_rad.setColorAt(1.0, QColor(0, 0, 0, 0))
+                painter.fillRect(QRectF(0, 0, w, h), QBrush(glow_rad))
+
+                # ── Show Only Writing (Zero Boxes) ────────────────────────
+                cy = h / 2.0
+
+                # Top Line: "Win Drop" or Device Name
+                top_font = get_display_font(13.5)
+                top_font.setWeight(QFont.Weight.Bold)
+                painter.setFont(top_font)
+
+                # Ambient text drop shadow for pristine legibility over moving visualizer
+                painter.setPen(QColor(0, 0, 0, 170))
+                painter.drawText(QRectF(20.0, cy - 23.0, w - 40.0, 24.0),
+                                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, device_name)
+                painter.setPen(QColor("#FFFFFF"))
+                painter.drawText(QRectF(20.0, cy - 24.0, w - 40.0, 24.0),
+                                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, device_name)
+
+                # Bottom Line: "Drop to Send" / Sending Status
+                bot_font = get_subtext_font(10.5)
+                painter.setFont(bot_font)
+                fm_bot = painter.fontMetrics()
+
+                if status == "done":
+                    bot_str = "Sent"
+                    bot_col = QColor(255, 255, 255, 240)
+                elif is_active_transfer:
+                    if fname:
+                        raw_fn = f"Sending {fname}"
+                        bot_str = fm_bot.elidedText(raw_fn, Qt.TextElideMode.ElideMiddle, int(w - 60.0))
+                    else:
+                        bot_str = f"Sending • {int(prog * 100)}%"
+                    bot_col = QColor(255, 255, 255, 190)
+                else:
+                    bot_str = "Drop to Send"
+                    bot_col = QColor(255, 255, 255, 170)
+
+                painter.setPen(QColor(0, 0, 0, 150))
+                painter.drawText(QRectF(20.0, cy + 4.0, w - 40.0, 20.0),
+                                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, bot_str)
+                painter.setPen(bot_col)
+                painter.drawText(QRectF(20.0, cy + 3.0, w - 40.0, 20.0),
+                                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, bot_str)
+
+                painter.restore()
+                return
+
+            else:
+                # Compact Mode (340 x 64 px)
+                cy = h / 2.0
+                badge_size = 36.0
+                badge_r = 10.0
+                badge_x = 18.0
+                badge_y = cy - badge_size / 2.0
+
+                ring_size = 26.0
+                ring_x = w - 18.0 - ring_size
+                ring_y = cy - ring_size / 2.0
+
+                text_x = badge_x + badge_size + 13.0
+                text_right = ring_x - 12.0
+                avail_w = max(40.0, text_right - text_x)
+
+            # ── 1. Left Column: Frosted Device Badge ───────────────────────
             badge_rect = QRectF(badge_x, badge_y, badge_size, badge_size)
-
-            # Frosted glass background: rgba(255, 255, 255, 0.10)
-            painter.setPen(QPen(QColor(255, 255, 255, 36), 1.0))
-            painter.setBrush(QBrush(QColor(255, 255, 255, 25)))
+            painter.setPen(QPen(QColor(255, 255, 255, 40), 1.0))
+            painter.setBrush(QBrush(QColor(255, 255, 255, 26)))
             painter.drawRoundedRect(badge_rect, badge_r, badge_r)
 
-            # Crisp white vector smartphone glyph (QPainterPath, zero emojis per AGENTS.md Rule 1)
+            # Anti-aliased pure white vector smartphone glyph (Rule 1: zero emojis)
             phone_cx = badge_x + badge_size / 2.0
             phone_cy = cy
-            pw = 13.0
-            ph = 21.0
+            pw = 13.5
+            ph = 21.5
             pr = 2.8
             phone_rect = QRectF(phone_cx - pw / 2.0, phone_cy - ph / 2.0, pw, ph)
 
-            painter.setPen(QPen(QColor(255, 255, 255, 235), 1.3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.setPen(QPen(QColor(255, 255, 255, 238), 1.3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
             painter.setBrush(QBrush(QColor(255, 255, 255, 20)))
             painter.drawRoundedRect(phone_rect, pr, pr)
 
-            # Notch / speaker slit at top of phone
+            # Speaker slit & home bar
             painter.drawLine(QPointF(phone_cx - 2.5, phone_cy - 7.5), QPointF(phone_cx + 2.5, phone_cy - 7.5))
-            # Home bar at bottom
             painter.drawLine(QPointF(phone_cx - 2.5, phone_cy + 7.5), QPointF(phone_cx + 2.5, phone_cy + 7.5))
 
-            # ── 2. Right Column: Circular Progress Ring & Checkmark (26 x 26 px) ──
-            ring_size = 26.0
-            ring_x = w - 18.0 - ring_size
-            ring_y = cy - ring_size / 2.0
+            # ── 2. Right Column: Circular Progress Ring & Checkmark ────────
             rcx = ring_x + ring_size / 2.0
             rcy = cy
             stroke_w = 2.5
             ring_rect = QRectF(ring_x + stroke_w / 2.0, ring_y + stroke_w / 2.0, ring_size - stroke_w, ring_size - stroke_w)
 
-            # Background track: 2.5 px stroke with rgba(255, 255, 255, 0.18)
             track_pen = QPen(QColor(255, 255, 255, 46), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
             painter.setPen(track_pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(ring_rect)
 
             if status == "done":
-                # Ring-to-Checkmark Completion: Close ring completely in pure white (#FFFFFF)
                 white_pen = QPen(QColor(255, 255, 255, 255), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
                 painter.setPen(white_pen)
                 painter.drawEllipse(ring_rect)
 
-                # Crisp pure white vector checkmark centered inside ring
                 chk = QPainterPath()
-                chk.moveTo(rcx - 4.5, rcy)
+                chk.moveTo(rcx - 4.6, rcy)
                 chk.lineTo(rcx - 1.2, rcy + 3.8)
                 chk.lineTo(rcx + 5.0, rcy - 3.8)
                 chk_pen = QPen(QColor("#FFFFFF"), 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
@@ -3337,57 +3555,50 @@ class DynamicIslandWidget(QWidget):
 
             elif is_active_transfer:
                 if prog > 0.005:
-                    # Smooth pure white (#FFFFFF) sweeping progress arc (0° to 360°)
                     sweep_angle = int(-prog * 360.0 * 16.0)
                     prog_pen = QPen(QColor(255, 255, 255, 255), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
                     painter.setPen(prog_pen)
                     painter.drawArc(ring_rect, 90 * 16, sweep_angle)
                 else:
-                    # Initial pulse at 0%
                     painter.setPen(QPen(QColor(255, 255, 255, 140), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
                     painter.drawArc(ring_rect, 90 * 16, -20 * 16)
             else:
-                # Proximity / Drag hover waiting state: subtle luminous breathing pulse
                 t_pulse = getattr(self, "_corona_time", 0.0)
                 pulse_angle = int((t_pulse * 140.0) % 360.0 * 16.0)
                 pulse_pen = QPen(QColor(255, 255, 255, 160), stroke_w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
                 painter.setPen(pulse_pen)
                 painter.drawArc(ring_rect, pulse_angle, 75 * 16)
 
-            # ── 3. Center Column: Two-Line Clean Stack ────────────────────
-            text_x = badge_x + badge_size + 13.0
-            text_right = ring_x - 12.0
-            avail_w = max(40.0, text_right - text_x)
-
-            # Top Line: "Win Drop" or "<Phone Name>" in 11 pt Bold #FFFFFF
-            top_font = get_display_font(11.0)
+            # ── 3. Center Column: Two-Line Typography Stack ────────────────
+            top_font = get_display_font(11.5 if is_expanded_mode else 11.0)
             top_font.setWeight(QFont.Weight.Bold)
             painter.setFont(top_font)
             painter.setPen(QColor("#FFFFFF"))
             fm_top = painter.fontMetrics()
             top_str = fm_top.elidedText(device_name, Qt.TextElideMode.ElideRight, int(avail_w))
-            painter.drawText(QRectF(text_x, cy - 17.0, avail_w, 18.0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, top_str)
+            painter.drawText(QRectF(text_x, cy - (18.0 if is_expanded_mode else 17.0), avail_w, 18.0),
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, top_str)
 
-            # Bottom Line: "Drop to Send" / Middle-elided filename in 9 pt rgba(255, 255, 255, 0.55)
-            bot_font = get_subtext_font(9.0)
+            bot_font = get_subtext_font(9.5 if is_expanded_mode else 9.0)
             painter.setFont(bot_font)
             fm_bot = painter.fontMetrics()
 
             if status == "done":
                 bot_str = "Sent"
-                painter.setPen(QColor(255, 255, 255, 220))
+                painter.setPen(QColor(255, 255, 255, 225))
             elif is_active_transfer:
                 if fname:
                     raw_fn = f"Sending {fname}"
                     bot_str = fm_bot.elidedText(raw_fn, Qt.TextElideMode.ElideMiddle, int(avail_w))
                 else:
                     bot_str = f"Sending • {int(prog * 100)}%"
-                painter.setPen(QColor(255, 255, 255, 140))
+                painter.setPen(QColor(255, 255, 255, 150))
             else:
                 bot_str = "Drop to Send"
-                painter.setPen(QColor(255, 255, 255, 140))
+                painter.setPen(QColor(255, 255, 255, 150))
 
-            painter.drawText(QRectF(text_x, cy + 1.0, avail_w, 16.0), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, bot_str)
+            painter.drawText(QRectF(text_x, cy + 1.0, avail_w, 16.0),
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, bot_str)
 
             painter.restore()
         except Exception:
@@ -3890,7 +4101,8 @@ class DynamicIslandWidget(QWidget):
 
         # 5. State-Specific Content
         if is_airdrop:
-            self._paint_drag_or_transfer(painter, w, h)
+            if not hasattr(self, "airdrop_overlay") or self.airdrop_overlay is None or not self.airdrop_overlay.isVisible():
+                self._paint_drag_or_transfer(painter, w, h)
         elif self._island_state == "toast":
             self._paint_toast_notch(painter, w, h)
         elif self._island_state == "device_popup":
